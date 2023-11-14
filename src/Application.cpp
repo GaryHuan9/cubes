@@ -1,5 +1,6 @@
 #include "Application.hpp"
 #include "Timer.hpp"
+#include "Renderer.hpp"
 
 #include "SFML/System.hpp"
 #include "SFML/Window.hpp"
@@ -7,7 +8,8 @@
 #include "imgui-SFML.h"
 #include "imgui.h"
 
-#include <chrono>
+#include <iostream>
+#include <array>
 
 namespace cb
 {
@@ -27,8 +29,12 @@ Application::Application()
 
 	auto& io = ImGui::GetIO();
 	io.ConfigWindowsMoveFromTitleBarOnly = true;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.Fonts->AddFontFromFileTTF("../ext/JetBrainsMono/JetBrainsMono-Bold.ttf", 16.0f);
 	ImGui::SFML::UpdateFontTexture();
+
+	make_component<Renderer>();
 }
 
 Application::~Application()
@@ -70,6 +76,7 @@ void Application::run()
 		timer.update(time.asMicroseconds());
 		ImGui::SFML::Update(*window, time);
 
+		for (auto& component : components) component->update();
 		ImGui::ShowDemoWindow();
 
 		window->clear(sf::Color::Black);

@@ -64,7 +64,7 @@ public:
 	HOST_DEVICE_CONSTEXPR T w() const { return at<3>(); }
 
 	template<class U>
-	HOST_DEVICE_CONSTEXPR Vector<U, D> as() const { return Vector(static_cast<U>(field), inner.template as<U>()); }
+	HOST_DEVICE_CONSTEXPR Vector<U, D> as() const { return Vector<U, D>(static_cast<U>(field), inner.template as<U>()); }
 
 	HOST_DEVICE_CONSTEXPR T dot(V value) const { return field * value.field + inner.dot(value.inner); }
 
@@ -72,7 +72,17 @@ public:
 
 	HOST_DEVICE_CONSTEXPR F magnitude() const { return sqrt(static_cast<F>(squared_magnitude())); }
 
-	HOST_DEVICE_CONSTEXPR Vector<F, D> normalized() const { return as<F>() * static_cast<F>(1.0) / sqrt(static_cast<F>(squared_magnitude())); }
+	HOST_DEVICE_CONSTEXPR
+	Vector<F, D> normalized() const
+	{
+		auto length = static_cast<F>(squared_magnitude());
+		F multiplier = static_cast<F>(1.0) / std::sqrt(length);
+
+#if __CUDA_ARCH__
+		multiplier = rsqrtf(length);
+#endif
+		return as<F>() * multiplier;
+	}
 
 	HOST_DEVICE_CONSTEXPR bool operator==(V value) const { return field == value.field && inner == value.inner; }
 

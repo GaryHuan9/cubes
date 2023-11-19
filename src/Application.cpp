@@ -1,15 +1,13 @@
 #include "Application.hpp"
 #include "Timer.hpp"
-#include "Renderer.hpp"
+#include "Rendering/Renderer.hpp"
+#include "Rendering/Engine.cuh"
 
 #include "SFML/System.hpp"
 #include "SFML/Window.hpp"
 #include "SFML/Graphics.hpp"
 #include "imgui-SFML.h"
 #include "imgui.h"
-
-#include <iostream>
-#include <array>
 
 namespace cb
 {
@@ -60,7 +58,7 @@ void Application::run()
 				case sf::Event::Closed:
 				{
 					window->close();
-					break;
+					return;
 				}
 				case sf::Event::Resized:
 				{
@@ -75,11 +73,14 @@ void Application::run()
 		sf::Time time = clock.restart();
 		timer.update(time.asMicroseconds());
 		ImGui::SFML::Update(*window, time);
-
-		for (auto& component : components) component->update();
-		ImGui::ShowDemoWindow();
-
 		window->clear(sf::Color::Black);
+
+		for (auto& component : components) component->update(timer);
+
+		find_component<Renderer>()->get_engine()->time = Timer::as_float(timer.time());
+
+		//		ImGui::ShowDemoWindow();
+
 		ImGui::SFML::Render(*window);
 		window->display();
 	}

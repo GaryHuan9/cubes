@@ -6,8 +6,6 @@
 #include <string>
 #include <memory>
 
-#define HOST_DEVICE_ENTRY __host__ __device__
-
 namespace sf
 {
 
@@ -27,6 +25,17 @@ class Application;
 class Component;
 class Renderer;
 
+class Accumulator;
+class Engine;
+class Camera;
+class Ray;
+
+template<typename T>
+class CudaArray;
+
+template<typename T>
+class CudaVector;
+
 template<typename T, size_t D>
 class Vector;
 typedef Vector<float, 2> Float2;
@@ -35,5 +44,8 @@ typedef Vector<float, 4> Float4;
 typedef Vector<int32_t, 2> Int2;
 typedef Vector<int32_t, 3> Int3;
 typedef Vector<int32_t, 4> Int4;
+typedef Vector<uint32_t, 2> UInt2;
+typedef Vector<uint32_t, 3> UInt3;
+typedef Vector<uint32_t, 4> UInt4;
 
 } // cb

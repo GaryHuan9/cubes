@@ -1,15 +1,14 @@
 #pragma once
 
-#include "main.hpp"
+#include "CudaUtilities.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <type_traits>
-#include <cuda_runtime.h>
 
 namespace cb
 {
 
-#define HOST_DEVICE_CONSTEXPR HOST_DEVICE_ENTRY constexpr
+#define HOST_DEVICE_CONSTEXPR HOST_DEVICE constexpr
 
 template<typename T, size_t D>
 class Vector
@@ -30,10 +29,10 @@ public:
 	template<typename... Ts, std::enable_if_t<sizeof...(Ts) == D - 1, bool> = true>
 	HOST_DEVICE_CONSTEXPR explicit Vector(T value, Ts... arguments) :  field(value), inner(arguments...) {}
 
-	template<class U>
+	template<typename U>
 	HOST_DEVICE_CONSTEXPR explicit Vector(U value) : Vector(static_cast<T>(value)) {}
 
-	template<class U>
+	template<typename U>
 	HOST_DEVICE_CONSTEXPR explicit Vector(Vector<U, D> value) : Vector(value.template as<T>()) {}
 
 	template<size_t I, std::enable_if_t<I < D, bool> = true>
@@ -63,7 +62,7 @@ public:
 
 	HOST_DEVICE_CONSTEXPR T w() const { return at<3>(); }
 
-	template<class U>
+	template<typename U>
 	HOST_DEVICE_CONSTEXPR Vector<U, D> as() const { return Vector<U, D>(static_cast<U>(field), inner.template as<U>()); }
 
 	HOST_DEVICE_CONSTEXPR T dot(V value) const { return field * value.field + inner.dot(value.inner); }
@@ -76,17 +75,25 @@ public:
 	Vector<F, D> normalized() const
 	{
 		auto length = static_cast<F>(squared_magnitude());
-		F multiplier = static_cast<F>(1.0) / std::sqrt(length);
-
 #if __CUDA_ARCH__
-		multiplier = rsqrtf(length);
+		F multiplier = rsqrtf(length);
+#else
+		F multiplier = static_cast<F>(1.0) / std::sqrt(length);
 #endif
 		return as<F>() * multiplier;
 	}
 
 	HOST_DEVICE_CONSTEXPR bool operator==(V value) const { return field == value.field && inner == value.inner; }
 
-	HOST_DEVICE_CONSTEXPR bool operator!=(V value) const { return field != value.field || inner != value.inner; }
+	HOST_DEVICE_CONSTEXPR bool operator<(V value) const { return field < value.field && inner < value.inner; }
+
+	HOST_DEVICE_CONSTEXPR bool operator<=(V value) const { return field <= value.field && inner <= value.inner; }
+
+	HOST_DEVICE_CONSTEXPR bool operator!=(V value) const { return !(operator==(value)); }
+
+	HOST_DEVICE_CONSTEXPR bool operator>(V value) const { return value.operator<(*this); }
+
+	HOST_DEVICE_CONSTEXPR bool operator>=(V value) const { return value.operator<(*this); }
 
 	HOST_DEVICE_CONSTEXPR V operator+() const { return V(+field, +inner); }
 
@@ -143,14 +150,16 @@ public:
 	template<size_t I, std::enable_if_t<I == 0, bool> = true>
 	HOST_DEVICE_CONSTEXPR T& at() { return field; }
 
-	template<class U>
+	template<typename U>
 	HOST_DEVICE_CONSTEXPR Vector<U, 1> as() const { return Vector<U, 1>(static_cast<U>(field)); }
 
 	HOST_DEVICE_CONSTEXPR T dot(V value) const { return field * value.field; }
 
 	HOST_DEVICE_CONSTEXPR bool operator==(V value) const { return field == value.field; }
 
-	HOST_DEVICE_CONSTEXPR bool operator!=(V value) const { return field != value.field; }
+	HOST_DEVICE_CONSTEXPR bool operator<(V value) const { return field < value.field; }
+
+	HOST_DEVICE_CONSTEXPR bool operator<=(V value) const { return field <= value.field; }
 
 	HOST_DEVICE_CONSTEXPR V operator+() const { return V(+field); }
 

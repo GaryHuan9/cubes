@@ -5,7 +5,7 @@ target_sources(cubes PRIVATE
         main.cpp
         Application.cpp
         Component.cpp
-        Renderer.cpp
 )
 
-add_subdirectory(kernels)
+add_subdirectory(Rendering)
+add_subdirectory(Utilities)

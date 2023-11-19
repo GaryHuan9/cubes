@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(cubes LANGUAGES CXX CUDA)
 
-set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 20)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/cubes/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/cubes/lib)
@@ -12,6 +12,8 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --extended-lambda")
 add_executable(cubes "")
 add_subdirectory(ext)
 add_subdirectory(src)
+
+target_include_directories(cubes PRIVATE include)
 
 add_custom_command(TARGET cubes POST_BUILD COMMAND
         ${CMAKE_COMMAND} -E copy_directory

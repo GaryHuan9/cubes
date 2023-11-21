@@ -1,7 +1,7 @@
 #include "Application.hpp"
 #include "Timer.hpp"
 #include "Rendering/Renderer.hpp"
-#include "Rendering/Engine.cuh"
+#include "Rendering/Engine.hpp"
 
 #include "SFML/System.hpp"
 #include "SFML/Window.hpp"
@@ -76,8 +76,6 @@ void Application::run()
 		window->clear(sf::Color::Black);
 
 		for (auto& component : components) component->update(timer);
-
-		find_component<Renderer>()->get_engine()->time = Timer::as_float(timer.time());
 
 		//		ImGui::ShowDemoWindow();
 

@@ -27,8 +27,12 @@ class Renderer;
 
 class Accumulator;
 class Engine;
-class Camera;
 class Ray;
+class NewPathPackets;
+class TracePackets;
+
+class Scene;
+class Camera;
 
 template<typename T>
 class CudaArray;

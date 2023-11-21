@@ -9,3 +9,4 @@ target_sources(cubes PRIVATE
 
 add_subdirectory(Rendering)
 add_subdirectory(Utilities)
+add_subdirectory(Scenic)

@@ -1,5 +1,5 @@
 #include "Rendering/Renderer.hpp"
-#include "Rendering/Engine.cuh"
+#include "Rendering/Engine.hpp"
 #include "Utilities/Vector.hpp"
 #include "Application.hpp"
 

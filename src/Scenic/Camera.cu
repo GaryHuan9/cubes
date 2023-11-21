@@ -1,5 +1,6 @@
-#include "Rendering/Camera.hpp"
+#include "Scenic/Camera.hpp"
 #include "Rendering/Ray.hpp"
+#include "Utilities/Vector.hpp"
 #include "Utilities/CudaUtilities.hpp"
 
 namespace cb
@@ -23,7 +24,8 @@ static Float3 rotate(const Float3& direction, const Float2& rotation)
 	return Float3(xz.x(), yz.x(), xz.y());
 }
 
-Ray Camera::get_ray(Float2 uv) const
+__device__
+Ray Camera::get_ray(Float2 uv)
 {
 	Float3 direction(uv.x(), uv.y(), forward_distance);
 	direction = rotate(direction, rotation).normalized();

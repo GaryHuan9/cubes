@@ -1,7 +1,11 @@
 #pragma once
 
 #include "main.hpp"
-#include "Utilities/CudaUtilities.hpp"
+#include "CudaUtilities.hpp"
+
+//Must be forward declared to allow inclusion of this file in non CUDA environments
+template<typename T>
+static inline T atomicAdd(T*, T);
 
 namespace cb
 {
@@ -97,14 +101,14 @@ public:
 	__device__
 	const T& operator[](size_type index) const
 	{
-		assert(index < size());
+		cuda_assert(index < size());
 		return pointer[index];
 	}
 
 	__device__
 	T& operator[](size_type index)
 	{
-		assert(index < size());
+		cuda_assert(index < size());
 		return pointer[index];
 	}
 
@@ -112,15 +116,15 @@ public:
 	T& push_back(const T& value) { return emplace_back(value); }
 
 	__device__
-	T& push_back(T&& value) { return emplace_back(std::move(value)); }
+	T& push_back(T&& value) { return emplace_back(cuda_move(value)); }
 
 	template<typename... Arguments>
 	__device__
 	T& emplace_back(Arguments&& ... arguments)
 	{
-		size_type index = atomicAdd(count, 1);
-		assert(index < capacity());
-		return *new(pointer + index) T(std::forward<Arguments>(arguments)...);
+		size_type index = atomicAdd(count, size_type(1));
+		cuda_assert(index < capacity());
+		return *new(pointer + index) T(cuda_forward<Arguments>(arguments)...);
 	}
 
 private:

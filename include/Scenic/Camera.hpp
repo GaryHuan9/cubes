@@ -11,7 +11,7 @@ class Camera
 public:
 	[[nodiscard]]
 	__device__
-	Ray get_ray(Float2 uv) const;
+	Ray get_ray(Float2 uv);
 
 private:
 	Float3 position;

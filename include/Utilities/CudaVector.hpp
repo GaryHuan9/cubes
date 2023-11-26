@@ -1,6 +1,7 @@
 #pragma once
 
 #include "main.hpp"
+#include "CudaArray.hpp"
 #include "CudaUtilities.hpp"
 
 //Must be forward declared to allow inclusion of this file in non CUDA environments
@@ -18,11 +19,10 @@ public:
 	using size_type = size_t;
 
 	__host__
-	explicit CudaVector(size_type capacity = 0) : max_count(capacity)
+	explicit CudaVector(size_type capacity = 0) : array(capacity)
 	{
 		if (capacity == 0) return;
 		cuda_check(cudaMalloc(&count, sizeof(size_type)));
-		cuda_check(cudaMalloc(&pointer, capacity * sizeof(T)));
 		clear();
 	}
 
@@ -33,27 +33,19 @@ public:
 
 	CudaVector& operator=(CudaVector&& source) noexcept
 	{
-		if (max_count > 0)
-		{
-			cuda_free_checked(count);
-			cuda_free_checked(pointer);
-		}
+		if (capacity() > 0) cuda_free_checked(count);
 
 		count = source.count;
-		max_count = source.max_count;
-		pointer = source.pointer;
+		array = std::move(source.array);
 
 		source.count = 0;
-		source.length = 0;
-		source.pointer = nullptr;
 		return *this;
 	}
 
 	~CudaVector()
 	{
-		if (max_count == 0) return;
+		if (capacity() == 0) return;
 		cuda_free_checked(count);
-		cuda_free_checked(pointer);
 	}
 
 	CudaVector(const CudaVector&) = delete;
@@ -62,54 +54,74 @@ public:
 	[[nodiscard]]
 	size_type size() const
 	{
+		if (capacity() == 0) return size_type();
+
 		size_type result;
-		cuda_check(cudaMemcpy(&result, count, sizeof(size_type), cudaMemcpyDefault));
+		cuda_copy(&result, count);
 		return result;
 	}
 
 	[[nodiscard]]
-	size_type capacity() const { return max_count; }
+	size_type capacity() const { return array.size(); }
 
 	[[nodiscard]]
-	const T* data() const { return pointer; }
+	const T* data() const { return array.data(); }
 
 	void clear()
 	{
-		cuda_check(cudaMemset(&count, 0, sizeof(size_type)));
+		if (capacity() == 0) return;
+		cuda_check(cudaMemset(count, 0, sizeof(size_type)));
 	}
 
-	operator Accessor() const { return CudaVector<T>::Accessor(*this); } // NOLINT(*-explicit-constructor)
+	[[nodiscard]]
+	CudaArray<T>::Accessor view() const
+	{
+		assert(capacity() > 0);
+		return CudaArray<T>::Accessor(size(), array.pointer);
+	}
+
+	[[nodiscard]]
+	CudaArray<T>::Accessor view(size_type new_size)
+	{
+		assert(capacity() > 0);
+		assert(new_size <= capacity());
+		cuda_copy(count, &new_size);
+		return CudaArray<T>::Accessor(new_size, array.pointer);
+	}
+
+	operator Accessor() const // NOLINT(*-explicit-constructor)
+	{
+		assert(capacity() > 0);
+		return Accessor(count, array);
+	}
 
 private:
 	size_type* count = nullptr;
-	size_type max_count = 0;
-	T* pointer = nullptr;
+	CudaArray<T> array;
 };
 
 template<typename T>
 class CudaVector<T>::Accessor
 {
 public:
-	explicit Accessor(const CudaVector& source) : count(source.count), max_count(source.max_count), pointer(source.pointer) {}
-
 	[[nodiscard]]
 	__device__ size_type size() const { return *count; }
 
 	[[nodiscard]]
-	__device__ size_type capacity() const { return max_count; }
+	__device__ size_type capacity() const { return array.size(); }
 
 	__device__
 	const T& operator[](size_type index) const
 	{
-		cuda_assert(index < size());
-		return pointer[index];
+		assert(index < size());
+		return array[index];
 	}
 
 	__device__
 	T& operator[](size_type index)
 	{
-		cuda_assert(index < size());
-		return pointer[index];
+		assert(index < size());
+		return array[index];
 	}
 
 	__device__
@@ -123,14 +135,20 @@ public:
 	T& emplace_back(Arguments&& ... arguments)
 	{
 		size_type index = atomicAdd(count, size_type(1));
-		cuda_assert(index < capacity());
-		return *new(pointer + index) T(cuda_forward<Arguments>(arguments)...);
+		assert(index < capacity());
+		return array.emplace(index, cuda_forward<Arguments>(arguments)...);
 	}
 
 private:
+	Accessor(size_type* count, const typename CudaArray<T>::Accessor& array) : count(count), array(array)
+	{
+		assert(count != nullptr);
+	}
+
 	size_type* count = nullptr;
-	size_type max_count = 0;
-	T* pointer = nullptr;
+	CudaArray<T>::Accessor array;
+
+	friend CudaVector<T>;
 };
 
 } // cb

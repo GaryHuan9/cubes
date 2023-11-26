@@ -15,9 +15,9 @@ public:
 
 	[[nodiscard]]
 	HOST_DEVICE
-	Float3 get_point(float length) const
+	Float3 get_point(float distance) const
 	{
-		return origin + direction * length;
+		return origin + direction * distance;
 	}
 
 	const Float3 origin;

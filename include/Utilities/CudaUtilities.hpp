@@ -34,17 +34,17 @@ inline void cuda_free_checked(T*& pointer)
 
 template<typename T>
 __host__
-inline void cuda_copy(T* destination, const T& source)
+inline void cuda_copy(T* destination, const T* source)
 {
-	cuda_check(cudaMemcpy(destination, &source, sizeof(T), cudaMemcpyHostToDevice));
+	cuda_check(cudaMemcpy(destination, source, sizeof(T), cudaMemcpyDefault));
 }
 
 //These following four functions are simple wrappers to satisfy CLion's intellisense
-HOST_DEVICE
-inline void cuda_assert(bool value)
-{
-	assert(value);
-}
+//HOST_DEVICE
+//inline void assert(bool value)
+//{
+//	assert(value);
+//}
 
 template<class T>
 HOST_DEVICE

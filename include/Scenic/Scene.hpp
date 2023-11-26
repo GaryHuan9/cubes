@@ -1,6 +1,7 @@
 #pragma once
 
 #include "main.hpp"
+#include "Camera.hpp"
 
 #include <cuda_runtime.h>
 
@@ -13,13 +14,14 @@ public:
 	Scene();
 
 	[[nodiscard]]
-	Camera* get_camera() const
+	HOST_DEVICE
+	Camera* get_camera()
 	{
-		return camera.get();
+		return &camera;
 	};
 
 private:
-	std::unique_ptr<Camera> camera;
+	Camera camera;
 };
 
 } // cb

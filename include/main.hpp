@@ -30,6 +30,7 @@ class Engine;
 class Ray;
 class NewPathPackets;
 class TracePackets;
+class HitPacket;
 
 class Scene;
 class Camera;

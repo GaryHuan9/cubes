@@ -1,15 +1,8 @@
 #include "Rendering/Engine.hpp"
 #include "Rendering/Packets.hpp"
+#include "Rendering/Kernels.hpp"
 #include "Rendering/Accumulator.hpp"
 #include "Scenic/Camera.hpp"
-#include "Scenic/Scene.hpp"
-#include "Rendering/Renderer.hpp"
-
-template<typename T>
-using Array = cb::CudaArray<T>::Accessor;
-
-template<typename T>
-using List = cb::CudaVector<T>::Accessor;
 
 namespace cb
 {
@@ -48,13 +41,27 @@ private:
 	dim3 block_size;
 };
 
-Engine::Engine() = default;
+static constexpr size_t Capacity = 1024 * 1024;
+static Camera* device_camera;
+
+Engine::Engine()
+{
+	new_path_packets = CudaVector<NewPathPackets>(Capacity);
+	trace_packets = CudaVector<TracePackets>(Capacity);
+	hit_packets = CudaVector<HitPacket>(Capacity);
+
+	Camera camera;
+
+	camera.set_position(Float3(0.0f, 0.0f, -3.0f));
+
+	cuda_check(cudaMalloc(&device_camera, sizeof(Camera)));
+	cuda_copy(device_camera, &camera);
+}
+
 Engine::~Engine() = default;
 
 void Engine::change_resolution(const UInt2& new_resolution)
 {
-	std::vector<int> a;
-
 	if (resolution == new_resolution) return;
 	resolution = new_resolution;
 
@@ -62,74 +69,25 @@ void Engine::change_resolution(const UInt2& new_resolution)
 	accumulators = CudaArray<Accumulator>(count, true);
 }
 
-namespace kernels
+void Engine::render()
 {
+	new_path_packets.clear();
+	trace_packets.clear();
+	hit_packets.clear();
 
-__global__
-static void test(UInt2 resolution, Array <Accumulator> accumulators, float time);
+	uint32_t count = resolution.x() * resolution.y();
+	accumulators = CudaArray<Accumulator>(count, true);
 
-__global__
-static void new_path(UInt2 resolution, List <NewPathPackets> packets, List <TracePackets> results);
+	KernelLaunch(Capacity).launch(kernels::render_begin, resolution, new_path_packets.view(new_path_packets.capacity()));
+	KernelLaunch(Capacity).launch(kernels::new_path, resolution, device_camera, new_path_packets, trace_packets);
+	KernelLaunch(Capacity).launch(kernels::trace_rays, trace_packets, hit_packets.view(trace_packets.size()));
+	KernelLaunch(Capacity).launch(kernels::render_end, resolution, trace_packets.view(), hit_packets.view(), accumulators);
+}
 
-__global__
-static void output(UInt2 resolution, Array <Accumulator> accumulators, cudaSurfaceObject_t surface);
-
-} // kernels
-
-void Engine::output(cudaSurfaceObject_t surface_object)
+void Engine::output(cudaSurfaceObject_t surface_object) const
 {
-	KernelLaunch launcher(resolution);
-	launcher.launch(kernels::test, resolution, accumulators, 0.0f);
-	launcher.launch(kernels::output, resolution, accumulators, surface_object);
+	//	KernelLaunch(resolution).launch(kernels::test, resolution, accumulators, 0.0f);
+	KernelLaunch(resolution).launch(kernels::output, resolution, accumulators, surface_object);
 }
 
 } // cb
-
-namespace cb::kernels
-{
-
-__global__
-static void test(UInt2 resolution, Array <Accumulator> accumulators, float time)
-{
-	UInt2 index = get_thread_index2D();
-	if (!(index < resolution)) return;
-	Float2 uv(Float2(index) / Float2(resolution));
-
-	float r = cosf(time + uv.x() + 0.0f);
-	float g = cosf(time + uv.y() + 2.0f);
-	float b = cosf(time + uv.x() + 4.0f);
-
-	Float3 color = Float3(r, g, b) * 0.5f + Float3(0.5f);
-	Accumulator& accumulator = accumulators[index.y() * resolution.x() + index.x()];
-	accumulator = {};
-	accumulator.insert(color);
-}
-
-__global__
-static void new_path(UInt2 resolution, const List <NewPathPackets> packets, List <TracePackets> results)
-{
-	uint32_t index = get_thread_index1D();
-	if (index < packets.size()) return;
-	const auto& packet = packets[index];
-
-	Camera* camera = nullptr;
-
-	Float2 uv = Float2(packet.pixel) - Float2(resolution) * 0.5f;
-	float multiplier = 1.0f / static_cast<float>(resolution.x());
-	results.emplace_back(packet.pixel, camera->get_ray(uv * multiplier));
-}
-
-__global__
-static void output(UInt2 resolution, Array <Accumulator> accumulators, cudaSurfaceObject_t surface)
-{
-	UInt2 position = get_thread_index2D();
-	if (!(position < resolution)) return;
-
-	Float3 color = accumulators[position.y() * resolution.x() + position.x()].current();
-
-	auto convert = [] __device__(float value) { return min((uint32_t)(sqrtf(value) * 256.0f), 255); };
-	uint32_t value = 0xFF000000 | (convert(color.x()) << 16) | (convert(color.y()) << 8) | convert(color.z());
-	surf2Dwrite(value, surface, static_cast<int>(position.x() * sizeof(uint32_t)), static_cast<int>(position.y()));
-}
-
-} // cb::kernel

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "main.hpp"
-#include "Utilities/CudaUtilities.hpp"
+#include "CudaUtilities.hpp"
 
 namespace cb
 {
@@ -53,19 +53,23 @@ public:
 	[[nodiscard]]
 	const T* data() const { return pointer; }
 
-	operator Accessor() const { return CudaArray<T>::Accessor(*this); } // NOLINT(*-explicit-constructor)
+	operator Accessor() const // NOLINT(*-explicit-constructor)
+	{
+		assert(pointer != nullptr);
+		return Accessor(length, pointer);
+	}
 
 private:
 	size_type length = 0;
 	T* pointer = nullptr;
+
+	friend CudaVector<T>;
 };
 
 template<typename T>
 class CudaArray<T>::Accessor
 {
 public:
-	explicit Accessor(const CudaArray& source) : length(source.length), pointer(source.pointer) {}
-
 	[[nodiscard]]
 	__device__ size_type size() const { return length; }
 
@@ -83,9 +87,25 @@ public:
 		return pointer[index];
 	}
 
+	template<typename... Arguments>
+	__device__
+	T& emplace(size_type index, Arguments&& ... arguments)
+	{
+		assert(index < size());
+		return *new(pointer + index) T(cuda_forward<Arguments>(arguments)...);
+	}
+
 private:
+	Accessor(size_type length, T* pointer) : length(length), pointer(pointer)
+	{
+		assert(pointer != nullptr);
+	}
+
 	size_type length = 0;
 	T* pointer = nullptr;
+
+	friend CudaArray<T>;
+	friend CudaVector<T>;
 };
 
 } // cb

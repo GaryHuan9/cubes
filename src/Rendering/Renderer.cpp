@@ -32,6 +32,7 @@ void Renderer::update(const Timer& timer)
 
 	if (new_resolution != resolution) change_resolution(new_resolution);
 
+	engine->render();
 	engine->output(surface_object);
 	cuda_check(cudaDeviceSynchronize());
 	window.draw(*sprite);

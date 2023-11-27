@@ -20,6 +20,9 @@ public:
 	void set_rotation(const Float2& new_rotation);
 	void set_field_of_view(float new_field_of_view);
 
+	void move_position(const Float3& local_delta);
+	void move_rotation(const Float2& local_delta);
+
 	[[nodiscard]]
 	HOST_DEVICE
 	Ray get_ray(Float2 uv);

@@ -41,21 +41,12 @@ private:
 	dim3 block_size;
 };
 
-static constexpr size_t Capacity = 1024 * 1024;
-static Camera* device_camera;
-
 Engine::Engine()
 {
+	cuda_check(cudaMalloc(&camera, sizeof(Camera)));
 	new_path_packets = CudaArray<NewPathPackets>(Capacity);
 	trace_packets = CudaVector<TracePackets>(Capacity);
 	hit_packets = CudaArray<HitPacket>(Capacity);
-
-	Camera camera;
-
-	camera.set_position(Float3(0.0f, 0.0f, -3.0f));
-
-	cuda_check(cudaMalloc(&device_camera, sizeof(Camera)));
-	cuda_copy(device_camera, &camera);
 }
 
 Engine::~Engine() = default;
@@ -66,19 +57,25 @@ void Engine::change_resolution(const UInt2& new_resolution)
 	resolution = new_resolution;
 
 	uint32_t count = resolution.x() * resolution.y();
-	accumulators = CudaArray<Accumulator>(count, true);
+	accumulators = CudaArray<Accumulator>(count);
+	accumulators.clear();
+}
+
+void Engine::change_camera(const Camera& new_camera)
+{
+	cuda_copy(camera, &new_camera);
+	accumulators.clear();
 }
 
 void Engine::render()
 {
-	cuda_check(cudaDeviceSynchronize());
 	trace_packets.clear();
 
-	//	uint32_t count = resolution.x() * resolution.y();
-	//	accumulators = CudaArray<Accumulator>(count, true);
+	scan_offset %= resolution.x() * resolution.y();
+	KernelLaunch(Capacity).launch(kernels::render_begin, resolution, scan_offset, Capacity, new_path_packets);
+	scan_offset += Capacity;
 
-	KernelLaunch(Capacity).launch(kernels::render_begin, resolution, 0, Capacity, new_path_packets);
-	KernelLaunch(Capacity).launch(kernels::new_path, resolution, device_camera, new_path_packets, trace_packets);
+	KernelLaunch(Capacity).launch(kernels::new_path, resolution, camera, new_path_packets, trace_packets);
 	KernelLaunch(Capacity).launch(kernels::trace_rays, trace_packets, hit_packets);
 	KernelLaunch(Capacity).launch(kernels::render_end, resolution, trace_packets, hit_packets, accumulators);
 }

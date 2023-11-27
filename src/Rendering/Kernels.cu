@@ -8,23 +8,6 @@ namespace cb::kernels
 {
 
 __global__
-void test(UInt2 resolution, Array<Accumulator> accumulators, float time)
-{
-	UInt2 index = get_thread_index2D();
-	if (!(index < resolution)) return;
-	Float2 uv(Float2(index) / Float2(resolution));
-
-	float r = cosf(time + uv.x() + 0.0f);
-	float g = cosf(time + uv.y() + 2.0f);
-	float b = cosf(time + uv.x() + 4.0f);
-
-	Float3 color = Float3(r, g, b) * 0.5f + Float3(0.5f);
-	Accumulator& accumulator = accumulators[index.y() * resolution.x() + index.x()];
-	accumulator = {};
-	accumulator.insert(color);
-}
-
-__global__
 void render_begin(UInt2 resolution, uint32_t offset, uint32_t length, Array<NewPathPackets> results)
 {
 	uint32_t index = get_thread_index1D();
@@ -111,10 +94,12 @@ void output(UInt2 resolution, Array<Accumulator> accumulators, cudaSurfaceObject
 	if (!(position < resolution)) return;
 
 	Float3 color = accumulators[position.y() * resolution.x() + position.x()].current();
-
 	auto convert = [] __device__(float value) { return min((uint32_t)(sqrtf(value) * 256.0f), 255); };
 	uint32_t value = 0xFF000000 | (convert(color.x()) << 16) | (convert(color.y()) << 8) | convert(color.z());
-	surf2Dwrite(value, surface, static_cast<int>(position.x() * sizeof(uint32_t)), static_cast<int>(position.y()));
+
+	int x = static_cast<int>(position.x() * sizeof(uint32_t));
+	int y = static_cast<int>(resolution.y() - position.y() - 1);
+	surf2Dwrite(value, surface, x, y);
 }
 
 } // cb::kernel

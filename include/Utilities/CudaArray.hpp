@@ -13,13 +13,10 @@ public:
 	class Accessor;
 	using size_type = size_t;
 
-	explicit CudaArray(size_type size = 0, bool clear = false) : length(size)
+	explicit CudaArray(size_type size = 0) : length(size)
 	{
 		if (size == 0) return;
 		cuda_check(cudaMalloc(&pointer, size * sizeof(T)));
-
-		if (!clear) return;
-		cuda_check(cudaMemset(pointer, 0, size * sizeof(T)));
 	}
 
 	CudaArray(CudaArray&& source) noexcept
@@ -52,6 +49,11 @@ public:
 
 	[[nodiscard]]
 	const T* data() const { return pointer; }
+
+	void clear()
+	{
+		cuda_check(cudaMemset(pointer, 0, size() * sizeof(T)));
+	}
 
 	operator Accessor() const // NOLINT(*-explicit-constructor)
 	{

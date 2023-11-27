@@ -41,6 +41,7 @@ public:
 
 private:
 	Float3 total;
+	//	Float3 error;
 	uint32_t count{};
 };
 

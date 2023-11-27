@@ -2,6 +2,7 @@
 #include "Timer.hpp"
 #include "Rendering/Renderer.hpp"
 #include "Rendering/Engine.hpp"
+#include "Scenic/Controller.hpp"
 
 #include "SFML/System.hpp"
 #include "SFML/Window.hpp"
@@ -33,6 +34,7 @@ Application::Application()
 	ImGui::SFML::UpdateFontTexture();
 
 	make_component<Renderer>();
+	make_component<Controller>();
 }
 
 Application::~Application()
@@ -44,6 +46,8 @@ void Application::run()
 {
 	sf::Clock clock;
 	Timer timer;
+
+	for (auto& component : components) component->initialize();
 
 	while (window->isOpen())
 	{
@@ -78,7 +82,6 @@ void Application::run()
 		for (auto& component : components) component->update(timer);
 
 		//		ImGui::ShowDemoWindow();
-
 		ImGui::SFML::Render(*window);
 		window->display();
 	}

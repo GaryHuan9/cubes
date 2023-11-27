@@ -8,21 +8,14 @@
 namespace cb
 {
 
-void Camera::set_position(const Float3& new_position)
+static float to_radians(float angle)
 {
-	position = new_position;
+	return angle * (std::numbers::pi_v<float> / 180.0f);
 }
 
-void Camera::set_rotation(const Float2& new_rotation)
+static float to_degrees(float angle)
 {
-	rotation = new_rotation;
-}
-
-void Camera::set_field_of_view(float new_field_of_view)
-{
-	field_of_view = new_field_of_view;
-	float radians = field_of_view * std::numbers::pi_v<float> / 180.0f;
-	forward_distance = 0.5f / std::tanf(radians / 2.0f);
+	return angle * (180.0f / std::numbers::pi_v<float>);
 }
 
 HOST_DEVICE
@@ -41,6 +34,41 @@ static Float3 rotate(const Float3& direction, const Float2& rotation)
 	Float2 yz = rotate(Float2(direction.y(), direction.z()), rotation.x());
 	Float2 xz = rotate(Float2(direction.x(), yz.y()), -rotation.y());
 	return Float3(xz.x(), yz.x(), xz.y());
+}
+
+void Camera::set_position(const Float3& new_position)
+{
+	position = new_position;
+}
+
+void Camera::set_rotation(const Float2& new_rotation)
+{
+	float x = std::min(std::max(new_rotation.x(), -90.0f), 90.0f);
+	float y = new_rotation.y();
+
+	while (y < -180.0f) y += 360.0f;
+	while (y >= 180.0f) y -= 360.0f;
+
+	rotation = Float2(to_radians(x), to_radians(y));
+}
+
+void Camera::set_field_of_view(float new_field_of_view)
+{
+	field_of_view = new_field_of_view;
+	forward_distance = 0.5f / std::tanf(to_radians(field_of_view / 2.0f));
+}
+
+void Camera::move_position(const Float3& local_delta)
+{
+	Float2 delta(local_delta.x(), local_delta.z());
+	delta = rotate(delta, -rotation.y());
+
+	set_position(position + Float3(delta.x(), local_delta.y(), delta.y()));
+}
+
+void Camera::move_rotation(const Float2& local_delta)
+{
+	set_rotation(Float2(to_degrees(rotation.x()), to_degrees(rotation.y())) + local_delta);
 }
 
 HOST_DEVICE

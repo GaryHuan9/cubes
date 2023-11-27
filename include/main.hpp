@@ -23,8 +23,8 @@ namespace cb
 
 class Application;
 class Component;
-class Renderer;
 
+class Renderer;
 class Accumulator;
 class Engine;
 class Ray;
@@ -32,6 +32,7 @@ class NewPathPackets;
 class TracePackets;
 class HitPacket;
 
+class Controller;
 class Scene;
 class Camera;
 

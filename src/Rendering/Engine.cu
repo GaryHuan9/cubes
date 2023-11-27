@@ -46,9 +46,9 @@ static Camera* device_camera;
 
 Engine::Engine()
 {
-	new_path_packets = CudaVector<NewPathPackets>(Capacity);
+	new_path_packets = CudaArray<NewPathPackets>(Capacity);
 	trace_packets = CudaVector<TracePackets>(Capacity);
-	hit_packets = CudaVector<HitPacket>(Capacity);
+	hit_packets = CudaArray<HitPacket>(Capacity);
 
 	Camera camera;
 
@@ -71,17 +71,16 @@ void Engine::change_resolution(const UInt2& new_resolution)
 
 void Engine::render()
 {
-	new_path_packets.clear();
+	cuda_check(cudaDeviceSynchronize());
 	trace_packets.clear();
-	hit_packets.clear();
 
-	uint32_t count = resolution.x() * resolution.y();
-	accumulators = CudaArray<Accumulator>(count, true);
+	//	uint32_t count = resolution.x() * resolution.y();
+	//	accumulators = CudaArray<Accumulator>(count, true);
 
-	KernelLaunch(Capacity).launch(kernels::render_begin, resolution, new_path_packets.view(new_path_packets.capacity()));
+	KernelLaunch(Capacity).launch(kernels::render_begin, resolution, 0, Capacity, new_path_packets);
 	KernelLaunch(Capacity).launch(kernels::new_path, resolution, device_camera, new_path_packets, trace_packets);
-	KernelLaunch(Capacity).launch(kernels::trace_rays, trace_packets, hit_packets.view(trace_packets.size()));
-	KernelLaunch(Capacity).launch(kernels::render_end, resolution, trace_packets.view(), hit_packets.view(), accumulators);
+	KernelLaunch(Capacity).launch(kernels::trace_rays, trace_packets, hit_packets);
+	KernelLaunch(Capacity).launch(kernels::render_end, resolution, trace_packets, hit_packets, accumulators);
 }
 
 void Engine::output(cudaSurfaceObject_t surface_object) const

@@ -25,17 +25,21 @@ void test(UInt2 resolution, Array<Accumulator> accumulators, float time)
 }
 
 __global__
-void render_begin(UInt2 resolution, Array<NewPathPackets> results)
+void render_begin(UInt2 resolution, uint32_t offset, uint32_t length, Array<NewPathPackets> results)
 {
 	uint32_t index = get_thread_index1D();
-	if (index >= results.size()) return;
+	if (index >= length) return;
 
-	UInt2 position = UInt2(index % resolution.x(), index / resolution.y());
-	results.emplace(index, position);
+	uint32_t position = index + offset;
+	uint32_t y = position / resolution.x();
+	uint32_t x = position - y * resolution.x();
+
+	if (y >= resolution.y()) y = y % resolution.y();
+	results.emplace(index, UInt2(x, y));
 }
 
 __global__
-void new_path(UInt2 resolution, Camera* camera, const List<NewPathPackets> packets, List<TracePackets> results)
+void new_path(UInt2 resolution, Camera* camera, const Array<NewPathPackets> packets, List<TracePackets> results)
 {
 	uint32_t index = get_thread_index1D();
 	if (index >= packets.size()) return;
@@ -88,14 +92,14 @@ void trace_rays(const List<TracePackets> packets, Array<HitPacket> results)
 }
 
 __global__
-void render_end(UInt2 resolution, const Array<TracePackets> packets, const Array<HitPacket> results, Array<Accumulator> accumulators)
+void render_end(UInt2 resolution, const List<TracePackets> packets, const Array<HitPacket> results, Array<Accumulator> accumulators)
 {
 	uint32_t index = get_thread_index1D();
 	if (index >= packets.size()) return;
 	const auto& packet = packets[index];
 	const auto& result = results[index];
 
-	Float3 color = result.hit() ? Float3(min(1.0f / result.distance, 1.0f)) : Float3();
+	Float3 color = result.hit() ? result.normal * 0.5f + Float3(0.5f) : Float3();
 	uint32_t destination = packet.pixel.y() * resolution.x() + packet.pixel.x();
 	accumulators[destination].insert(color);
 }

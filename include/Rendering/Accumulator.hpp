@@ -10,7 +10,7 @@ class Accumulator
 {
 public:
 	[[nodiscard]]
-	HOST_DEVICE
+	__device__
 	Float3 current() const
 	{
 		if (count == 0) return {};
@@ -18,26 +18,29 @@ public:
 	}
 
 	[[nodiscard]]
-	HOST_DEVICE
+	__device__
 	uint32_t population() const
 	{
 		return count;
 	}
 
-	HOST_DEVICE
+	__device__
 	void insert(const Float3& value)
 	{
-		//TODO: ensure compiler does not optimize error out
-		Float3 delta = value - error;
-		Float3 new_total = total + delta;
-		error = new_total - total - delta;
-		total = new_total;
-		++count;
+		atomicAdd(&total.x(), value.x());
+		atomicAdd(&total.y(), value.y());
+		atomicAdd(&total.z(), value.z());
+		atomicAdd(&count, 1);
+
+		//		Float3 delta = value - error;
+		//		Float3 new_total = total + delta;
+		//		error = new_total - total - delta;
+		//		total = new_total;
+		//		++count;
 	}
 
 private:
 	Float3 total;
-	Float3 error;
 	uint32_t count{};
 };
 

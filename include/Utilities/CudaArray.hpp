@@ -62,8 +62,6 @@ public:
 private:
 	size_type length = 0;
 	T* pointer = nullptr;
-
-	friend CudaVector<T>;
 };
 
 template<typename T>
@@ -103,9 +101,7 @@ private:
 
 	size_type length = 0;
 	T* pointer = nullptr;
-
 	friend CudaArray<T>;
-	friend CudaVector<T>;
 };
 
 } // cb

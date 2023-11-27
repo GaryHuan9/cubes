@@ -73,22 +73,6 @@ public:
 		cuda_check(cudaMemset(count, 0, sizeof(size_type)));
 	}
 
-	[[nodiscard]]
-	CudaArray<T>::Accessor view() const
-	{
-		assert(capacity() > 0);
-		return CudaArray<T>::Accessor(size(), array.pointer);
-	}
-
-	[[nodiscard]]
-	CudaArray<T>::Accessor view(size_type new_size)
-	{
-		assert(capacity() > 0);
-		assert(new_size <= capacity());
-		cuda_copy(count, &new_size);
-		return CudaArray<T>::Accessor(new_size, array.pointer);
-	}
-
 	operator Accessor() const // NOLINT(*-explicit-constructor)
 	{
 		assert(capacity() > 0);
@@ -147,7 +131,6 @@ private:
 
 	size_type* count = nullptr;
 	CudaArray<T>::Accessor array;
-
 	friend CudaVector<T>;
 };
 

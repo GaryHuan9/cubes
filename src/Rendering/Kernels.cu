@@ -55,6 +55,35 @@ static bool try_intersect_sphere(const Float3& position, float radius, const Ray
 	return true;
 }
 
+__device__
+static bool try_intersect_scene(const Ray& ray, float& distance, Float3& normal)
+{
+	constexpr size_t Count = 4;
+	__constant__ static const Float4 Spheres[Count] = { Float4(0.0f, 1.0f, 0.0f, 1.0f),
+	                                                    Float4(1.0f, 2.0f, 2.0f, 0.5f),
+	                                                    Float4(-1.0f, 3.0f, 1.0f, 0.5f),
+	                                                    Float4(0.0f, -100.0f, 0.0f, 100.0f) };
+
+	distance = INFINITY;
+
+	for (const Float4& sphere : Spheres)
+	{
+		Float3 position(sphere.x(), sphere.y(), sphere.z());
+		float radius(sphere.w());
+		float new_distance;
+
+		if (try_intersect_sphere(position, radius, ray, new_distance) && new_distance < distance)
+		{
+			distance = new_distance;
+			normal = ray.get_point(distance) - position;
+		}
+	}
+
+	if (isinf(distance)) return false;
+	normal = normal.normalized();
+	return true;
+}
+
 __global__
 void trace_rays(const List<TracePackets> packets, Array<HitPacket> results)
 {
@@ -62,16 +91,11 @@ void trace_rays(const List<TracePackets> packets, Array<HitPacket> results)
 	if (index >= packets.size()) return;
 	const auto& packet = packets[index];
 
-	Float3 position = Float3(0.0f, 0.0f, 0.0f);
-	float radius = 1.0f;
 	float distance;
+	Float3 normal;
 
-	if (try_intersect_sphere(position, radius, packet.ray, distance))
-	{
-		Float3 normal = packet.ray.get_point(distance) - position;
-		results.emplace(index, distance, normal.normalized());
-	}
-	else results.emplace(index);
+	if (!try_intersect_scene(packet.ray, distance, normal)) results.emplace(index);
+	else results.emplace(index, distance, normal);
 }
 
 __global__
@@ -82,9 +106,15 @@ void render_end(UInt2 resolution, const List<TracePackets> packets, const Array<
 	const auto& packet = packets[index];
 	const auto& result = results[index];
 
-	Float3 color = result.hit() ? result.normal * 0.5f + Float3(0.5f) : Float3();
-	uint32_t destination = packet.pixel.y() * resolution.x() + packet.pixel.x();
-	accumulators[destination].insert(color);
+	Float3 color;
+
+	if (result.hit())
+	{
+		color = result.normal * 0.5f + Float3(0.5f);
+		//		color = Float3(max(result.normal.dot(Float3(1.0f).normalized()), 0.0f));
+	}
+
+	accumulators[packet.pixel.y() * resolution.x() + packet.pixel.x()].insert(color);
 }
 
 __global__

@@ -15,3 +15,4 @@ set(IMGUI_SFML_IMGUI_DEMO ON)
 add_subdirectory(imgui-sfml)
 
 target_link_libraries(cubes ImGui-SFML::ImGui-SFML)
+target_include_directories(cubes PRIVATE opengametools)

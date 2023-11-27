@@ -36,6 +36,16 @@ static Float3 rotate(const Float3& direction, const Float2& rotation)
 	return Float3(xz.x(), yz.x(), xz.y());
 }
 
+Float3 Camera::get_position() const
+{
+	return position;
+}
+
+Float2 Camera::get_rotation() const
+{
+	return Float2(to_degrees(rotation.x()), to_degrees(rotation.y()));
+}
+
 void Camera::set_position(const Float3& new_position)
 {
 	position = new_position;
@@ -64,11 +74,6 @@ void Camera::move_position(const Float3& local_delta)
 	delta = rotate(delta, -rotation.y());
 
 	set_position(position + Float3(delta.x(), local_delta.y(), delta.y()));
-}
-
-void Camera::move_rotation(const Float2& local_delta)
-{
-	set_rotation(Float2(to_degrees(rotation.x()), to_degrees(rotation.y())) + local_delta);
 }
 
 HOST_DEVICE

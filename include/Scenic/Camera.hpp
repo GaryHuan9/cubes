@@ -16,12 +16,14 @@ public:
 		set_field_of_view(65.0f);
 	}
 
+	[[nodiscard]] Float3 get_position() const;
+	[[nodiscard]] Float2 get_rotation() const;
+
 	void set_position(const Float3& new_position);
 	void set_rotation(const Float2& new_rotation);
 	void set_field_of_view(float new_field_of_view);
 
 	void move_position(const Float3& local_delta);
-	void move_rotation(const Float2& local_delta);
 
 	[[nodiscard]]
 	HOST_DEVICE

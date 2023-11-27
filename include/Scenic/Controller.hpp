@@ -17,8 +17,8 @@ public:
 	void update(const Timer& timer) override;
 
 private:
-	Int2 last_mouse_position;
 	std::unique_ptr<Camera> camera;
+	Int2 last_mouse_position;
 	Engine* engine{};
 };
 

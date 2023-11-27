@@ -4,14 +4,14 @@
 #include "Rendering/Engine.hpp"
 #include "Application.hpp"
 
-#include "SFML/System.hpp"
 #include "SFML/Window.hpp"
 #include "SFML/Graphics.hpp"
 
 namespace cb
 {
 
-Controller::Controller(Application& application) : Component(application), camera(std::make_unique<Camera>()) {}
+Controller::Controller(Application& application) : Component(application),
+                                                   camera(std::make_unique<Camera>()) {}
 
 Controller::~Controller() = default;
 
@@ -19,8 +19,8 @@ void Controller::initialize()
 {
 	engine = application.find_component<Renderer>()->get_engine();
 
-	camera->set_position(Float3(1.0f, 1.0f, -5.0f));
-	//	camera->set_rotation(Float2(10.0f, 45.0f));
+	camera->set_position(Float3(3.0f, 3.0f, -3.0f));
+	camera->set_rotation(Float2(30.0f, -45.0f));
 	engine->change_camera(*camera);
 }
 
@@ -56,7 +56,7 @@ void Controller::update(const Timer& timer)
 	if (position_delta == Int3() && rotation_delta == Int2()) return;
 
 	camera->move_position(Float3(position_delta) * 3.5f * Timer::as_float(timer.frame_time()));
-	camera->move_rotation(Float2(rotation_delta) * 0.1f);
+	camera->set_rotation(camera->get_rotation() + Float2(rotation_delta) * 0.1f);
 	engine->change_camera(*camera);
 }
 

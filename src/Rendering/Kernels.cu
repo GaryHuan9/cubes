@@ -35,7 +35,7 @@ void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Camera*
 	float multiplier = 1.0f / static_cast<float>(resolution.x());
 	Ray ray = camera->get_ray(uv * multiplier);
 
-	paths.emplace(index, result_index);
+	paths.emplace(index);
 	trace_queries.emplace_back(index, ray);
 }
 
@@ -154,7 +154,7 @@ void diffuse(List<MaterialQuery> material_queries)
 }
 
 __global__
-void advance(List<MaterialQuery> material_queries, List<TraceQuery> trace_queries, Array<Path> paths, Array<Accumulator> accumulators)
+void advance(List<MaterialQuery> material_queries, List<TraceQuery> trace_queries, Array<Path> paths)
 {
 	uint32_t index = get_thread_index1D();
 	if (index >= material_queries.size()) return;
@@ -165,16 +165,13 @@ void advance(List<MaterialQuery> material_queries, List<TraceQuery> trace_querie
 	Float3 incident = query.get_incident_world().normalized();
 	Float3 scatter = query.get_scatter() * incident.dot(query.normal) / pdf;
 
-	if (!almost_zero(pdf) && path.bounce(scatter))
-	{
-		Ray ray(query.point + incident * 1E-3f, incident);
-		trace_queries.emplace_back(query.path_index, ray);
-	}
-	else accumulators[path.result_index].insert(path.get_result());
+	if (almost_zero(pdf) || !path.bounce(scatter)) return;
+	Ray ray(query.point + incident * 1E-4f, incident);
+	trace_queries.emplace_back(query.path_index, ray);
 }
 
 __global__
-void escaped(const List<EscapedPacket> escaped_packets, Array<Path> paths, Array<Accumulator> accumulators)
+void escaped(const List<EscapedPacket> escaped_packets, Array<Path> paths)
 {
 	uint32_t index = get_thread_index1D();
 	if (index >= escaped_packets.size()) return;
@@ -183,8 +180,19 @@ void escaped(const List<EscapedPacket> escaped_packets, Array<Path> paths, Array
 
 	//TODO fancier evaluate infinite
 	path.contribute(Float3(0.1f));
+}
 
-	accumulators[path.result_index].insert(path.get_result());
+__global__
+void accumulate(const Array<Path> paths, uint32_t index_start, Array<Accumulator> accumulators)
+{
+	uint32_t index = get_thread_index1D();
+	if (index >= paths.size()) return;
+	const auto& path = paths[index];
+
+	uint32_t result_index = index_start + index;
+	uint32_t count = accumulators.size();
+	while (result_index >= count) result_index -= count;
+	accumulators[result_index].insert(path.get_result());
 }
 
 __global__

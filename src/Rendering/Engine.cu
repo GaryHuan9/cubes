@@ -62,17 +62,29 @@ void Engine::change_resolution(const UInt2& new_resolution)
 
 	uint32_t count = resolution.x() * resolution.y();
 	accumulators = CudaArray<Accumulator>(count);
-	accumulators.clear();
+	reset_render();
 }
 
 void Engine::change_camera(const Camera& new_camera)
 {
 	cuda_copy(camera, &new_camera);
+	reset_render();
+}
+
+void Engine::reset_render()
+{
 	accumulators.clear();
+	index_start = resolution.x() * resolution.y() / 2;
+	index_start -= Capacity / 2;
 }
 
 void Engine::render()
 {
+	cudaEvent_t start_event, end_event;
+	cudaEventCreate(&start_event);
+	cudaEventCreate(&end_event);
+	cudaEventRecord(start_event);
+
 	cuda_check(cudaDeviceSynchronize());
 
 	trace_queries.clear();
@@ -82,8 +94,10 @@ void Engine::render()
 	KernelLaunch launcher(Capacity);
 
 	index_start %= resolution.x() * resolution.y();
-	launcher.launch(kernels::new_path, paths, resolution, index_start, camera, trace_queries);
+	size_t start = index_start;
 	index_start += Capacity;
+
+	launcher.launch(kernels::new_path, paths, resolution, start, camera, trace_queries);
 
 	for (size_t depth = 0; depth < 16; ++depth)
 	{
@@ -94,13 +108,22 @@ void Engine::render()
 		trace_queries.clear();
 
 		launcher.launch(kernels::diffuse, material_queries);
-		launcher.launch(kernels::advance, material_queries, trace_queries, paths, accumulators);
-		launcher.launch(kernels::escaped, escape_packets, paths, accumulators);
+		launcher.launch(kernels::advance, material_queries, trace_queries, paths);
+		launcher.launch(kernels::escaped, escape_packets, paths);
 
 		cuda_check(cudaDeviceSynchronize());
 		material_queries.clear();
 		escape_packets.clear();
 	}
+
+	launcher.launch(kernels::accumulate, paths, start, accumulators);
+
+	cudaEventRecord(end_event);
+	cudaEventSynchronize(end_event);
+
+	//	float milliseconds;
+	//	cuda_check(cudaEventElapsedTime(&milliseconds, start_event, end_event));
+	//	std::printf("Sampling took %f ms\n", milliseconds);
 }
 
 void Engine::output(cudaSurfaceObject_t surface_object) const

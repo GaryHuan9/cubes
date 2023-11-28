@@ -33,10 +33,13 @@ __global__
 void diffuse(List<MaterialQuery> material_queries);
 
 __global__
-void advance(List<MaterialQuery> material_queries, List<TraceQuery> trace_queries, Array<Path> paths, Array<Accumulator> accumulators);
+void advance(List<MaterialQuery> material_queries, List<TraceQuery> trace_queries, Array<Path> paths);
 
 __global__
-void escaped(List<EscapedPacket> escaped_packets, Array<Path> paths, Array<Accumulator> accumulators);
+void escaped(List<EscapedPacket> escaped_packets, Array<Path> paths);
+
+__global__
+void accumulate(Array<Path> paths, uint32_t index_start, Array<Accumulator> accumulators);
 
 __global__
 void output(UInt2 resolution, Array<Accumulator> accumulators, cudaSurfaceObject_t surface);

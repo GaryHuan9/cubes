@@ -20,6 +20,8 @@ public:
 
 	void change_camera(const Camera& new_camera);
 
+	void reset_render();
+
 	void render();
 
 	void output(cudaSurfaceObject_t surface_object) const;

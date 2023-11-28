@@ -30,11 +30,6 @@ public:
 	__device__
 	void insert(const Float3& value)
 	{
-		//		atomicAdd(&total.x(), value.x());
-		//		atomicAdd(&total.y(), value.y());
-		//		atomicAdd(&total.z(), value.z());
-		//		atomicAdd(&count, 1);
-
 		//		Float3 delta = value - error;
 		//		Float3 new_total = total + delta;
 		//		error = new_total - total - delta;
@@ -78,9 +73,7 @@ class Path
 {
 public:
 	__device__
-	explicit Path(size_t result_index) : result_index(result_index), energy(1.0f) {}
-
-	const size_t result_index;
+	Path() : energy(1.0f) {}
 
 	HOST_DEVICE_NODISCARD
 	Float3 get_result() const

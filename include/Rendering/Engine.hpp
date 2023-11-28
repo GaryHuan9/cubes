@@ -5,6 +5,8 @@
 #include "Utilities/CudaArray.hpp"
 #include "Utilities/CudaVector.hpp"
 
+#include <curand_kernel.h>
+
 namespace cb
 {
 
@@ -32,6 +34,8 @@ private:
 
 	CudaArray<Path> paths;
 	CudaArray<Accumulator> accumulators;
+	CudaArray<curandState> randoms;
+
 	CudaVector<TraceQuery> trace_queries;
 	CudaVector<MaterialQuery> material_queries;
 	CudaVector<EscapedPacket> escape_packets;

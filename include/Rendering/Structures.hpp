@@ -14,7 +14,10 @@ public:
 	Float3 current() const
 	{
 		if (count == 0) return {};
-		return total / static_cast<float>(count);
+		//		return total / static_cast<float>(count);
+
+		double multiplier = 1.0 / static_cast<double>(count);
+		return Float3(x * multiplier, y * multiplier, z * multiplier);
 	}
 
 	[[nodiscard]]
@@ -27,22 +30,32 @@ public:
 	__device__
 	void insert(const Float3& value)
 	{
-		atomicAdd(&total.x(), value.x());
-		atomicAdd(&total.y(), value.y());
-		atomicAdd(&total.z(), value.z());
-		atomicAdd(&count, 1);
+		//		atomicAdd(&total.x(), value.x());
+		//		atomicAdd(&total.y(), value.y());
+		//		atomicAdd(&total.z(), value.z());
+		//		atomicAdd(&count, 1);
 
 		//		Float3 delta = value - error;
 		//		Float3 new_total = total + delta;
 		//		error = new_total - total - delta;
 		//		total = new_total;
 		//		++count;
+
+		atomicAdd(&x, value.x());
+		atomicAdd(&y, value.y());
+		atomicAdd(&z, value.z());
+		atomicAdd(&count, 1);
 	}
 
 private:
-	Float3 total;
+	//	Float3 total;
 	//	Float3 error;
-	uint32_t count{};
+	//	uint32_t count{};
+
+	double x{};
+	double y{};
+	double z{};
+	uint64_t count{};
 };
 
 class Ray

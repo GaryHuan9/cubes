@@ -6,34 +6,6 @@
 namespace cb
 {
 
-Engine::Engine()
-{
-	cuda_check(cudaMalloc(&camera, sizeof(Camera)));
-
-	paths = CudaArray<Path>(Capacity);
-	trace_queries = CudaVector<TraceQuery>(Capacity);
-	material_queries = CudaVector<MaterialQuery>(Capacity);
-	escape_packets = CudaVector<EscapedPacket>(Capacity);
-}
-
-Engine::~Engine() = default;
-
-void Engine::change_resolution(const UInt2& new_resolution)
-{
-	if (resolution == new_resolution) return;
-	resolution = new_resolution;
-
-	uint32_t count = resolution.x() * resolution.y();
-	accumulators = CudaArray<Accumulator>(count);
-	accumulators.clear();
-}
-
-void Engine::change_camera(const Camera& new_camera)
-{
-	cuda_copy(camera, &new_camera);
-	accumulators.clear();
-}
-
 class KernelLaunch
 {
 public:
@@ -68,6 +40,37 @@ private:
 	dim3 block_size;
 };
 
+Engine::Engine()
+{
+	cuda_check(cudaMalloc(&camera, sizeof(Camera)));
+
+	paths = CudaArray<Path>(Capacity);
+	randoms = CudaArray<curandState>(Capacity);
+	KernelLaunch(Capacity).launch(kernels::new_random, randoms);
+
+	trace_queries = CudaVector<TraceQuery>(Capacity);
+	material_queries = CudaVector<MaterialQuery>(Capacity);
+	escape_packets = CudaVector<EscapedPacket>(Capacity);
+}
+
+Engine::~Engine() = default;
+
+void Engine::change_resolution(const UInt2& new_resolution)
+{
+	if (resolution == new_resolution) return;
+	resolution = new_resolution;
+
+	uint32_t count = resolution.x() * resolution.y();
+	accumulators = CudaArray<Accumulator>(count);
+	accumulators.clear();
+}
+
+void Engine::change_camera(const Camera& new_camera)
+{
+	cuda_copy(camera, &new_camera);
+	accumulators.clear();
+}
+
 void Engine::render()
 {
 	cuda_check(cudaDeviceSynchronize());
@@ -85,7 +88,7 @@ void Engine::render()
 	for (size_t depth = 0; depth < 16; ++depth)
 	{
 		launcher.launch(kernels::trace, trace_queries);
-		launcher.launch(kernels::shade, trace_queries, material_queries, escape_packets);
+		launcher.launch(kernels::shade, trace_queries, material_queries, escape_packets, randoms);
 
 		cuda_check(cudaDeviceSynchronize());
 		trace_queries.clear();

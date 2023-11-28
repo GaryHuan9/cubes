@@ -4,6 +4,9 @@
 #include "Utilities/Vector.hpp"
 #include "Utilities/CudaArray.hpp"
 #include "Utilities/CudaVector.hpp"
+#include "Utilities/CudaUtilities.hpp"
+
+#include <curand_kernel.h>
 
 namespace cb::kernels
 {
@@ -15,13 +18,16 @@ template<typename T>
 using List = cb::CudaVector<T>::Accessor;
 
 __global__
+void new_random(Array<curandState> randoms);
+
+__global__
 void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Camera* camera, List<TraceQuery> trace_queries);
 
 __global__
 void trace(List<TraceQuery> trace_queries);
 
 __global__
-void shade(List<TraceQuery> trace_queries, List<MaterialQuery> material_queries, List<EscapedPacket> escaped_packets);
+void shade(List<TraceQuery> trace_queries, List<MaterialQuery> material_queries, List<EscapedPacket> escaped_packets, Array<curandState> randoms);
 
 __global__
 void diffuse(List<MaterialQuery> material_queries);

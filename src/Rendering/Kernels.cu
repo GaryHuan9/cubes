@@ -10,6 +10,14 @@ namespace cb::kernels
 {
 
 __global__
+void new_random(Array<curandState> randoms)
+{
+	uint32_t index = get_thread_index1D();
+	if (index >= randoms.size()) return;
+	curand_init(42, index, 0, &randoms[index]);
+}
+
+__global__
 void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Camera* camera, List<TraceQuery> trace_queries)
 {
 	uint32_t index = get_thread_index1D();
@@ -98,7 +106,7 @@ void trace(List<TraceQuery> trace_queries)
 }
 
 __global__
-void shade(const List<TraceQuery> trace_queries, List<MaterialQuery> material_queries, List<EscapedPacket> escaped_packets)
+void shade(const List<TraceQuery> trace_queries, List<MaterialQuery> material_queries, List<EscapedPacket> escaped_packets, Array<curandState> randoms)
 {
 	uint32_t index = get_thread_index1D();
 	if (index >= trace_queries.size()) return;
@@ -106,8 +114,11 @@ void shade(const List<TraceQuery> trace_queries, List<MaterialQuery> material_qu
 
 	if (query.hit())
 	{
+		curandState* random = &randoms[index];
+		Float2 sample(curand_uniform(random), curand_uniform(random));
+		material_queries.emplace_back(query, sample);
+
 		//TODO find material queue
-		material_queries.emplace_back(query, Float2(0.5f, 0.5f));
 	}
 	else escaped_packets.emplace_back(query.path_index, query.ray.direction);
 }
@@ -123,8 +134,8 @@ static Float3 cosine_hemisphere(const Float2& sample)
 	sincosf(angle, &disk.y(), &disk.x());
 	disk *= radius;
 
-	float z = disk.squared_magnitude();
-	return Float3(disk.x(), disk.y(), z);
+	float z = 1.0f - disk.squared_magnitude();
+	return Float3(disk.x(), disk.y(), sqrtf(z));
 }
 
 __global__
@@ -135,10 +146,11 @@ void diffuse(List<MaterialQuery> material_queries)
 	auto& query = material_queries[index];
 
 	Float3 incident = cosine_hemisphere(query.sample);
-	float pdf = incident.z() * (1.0f / std::numbers::pi_v<float>);
-	if (query.get_outgoing().z() < 0.0f) incident.z() *= -1.0f;
+	constexpr float PiR = 1.0f / std::numbers::pi_v<float>;
 
-	query.set_sampled(incident, Float3(0.8f), pdf);
+	float pdf = incident.z() * PiR;
+	if (query.get_outgoing().z() < 0.0f) incident.z() *= -1.0f;
+	query.set_sampled(incident, Float3(0.8f) * PiR, pdf);
 }
 
 __global__
@@ -149,12 +161,13 @@ void advance(List<MaterialQuery> material_queries, List<TraceQuery> trace_querie
 	const auto& query = material_queries[index];
 	auto& path = paths[query.path_index];
 
-	Float3 incident = query.get_incident_world();
-	Float3 scatter = query.get_scatter() * incident.dot(query.normal) / query.get_pdf();
+	float pdf = query.get_pdf();
+	Float3 incident = query.get_incident_world().normalized();
+	Float3 scatter = query.get_scatter() * incident.dot(query.normal) / pdf;
 
-	if (path.bounce(scatter))
+	if (!almost_zero(pdf) && path.bounce(scatter))
 	{
-		Ray ray(query.point, incident.normalized());
+		Ray ray(query.point + incident * 1E-3f, incident);
 		trace_queries.emplace_back(query.path_index, ray);
 	}
 	else accumulators[path.result_index].insert(path.get_result());

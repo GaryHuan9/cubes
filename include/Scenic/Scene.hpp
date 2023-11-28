@@ -13,8 +13,7 @@ class Scene
 public:
 	Scene();
 
-	[[nodiscard]]
-	HOST_DEVICE
+	HOST_DEVICE_NODISCARD
 	Camera* get_camera()
 	{
 		return &camera;
@@ -24,4 +23,4 @@ private:
 	Camera camera;
 };
 
-} // cb
+}

@@ -38,4 +38,4 @@ UInt3 get_thread_index3D()
 	return block_index * block_size + thread_index;
 }
 
-} // cb
+}

@@ -25,12 +25,13 @@ class Application;
 class Component;
 
 class Renderer;
-class Accumulator;
 class Engine;
 class Ray;
-class NewPathPackets;
-class TracePackets;
-class HitPacket;
+class Accumulator;
+class Path;
+class TraceQuery;
+class EscapedPacket;
+class MaterialQuery;
 
 class Controller;
 class Scene;
@@ -54,4 +55,4 @@ typedef Vector<uint32_t, 2> UInt2;
 typedef Vector<uint32_t, 3> UInt3;
 typedef Vector<uint32_t, 4> UInt4;
 
-} // cb
+}

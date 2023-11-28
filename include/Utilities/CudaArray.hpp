@@ -106,4 +106,4 @@ private:
 	friend CudaArray<T>;
 };
 
-} // cb
+}

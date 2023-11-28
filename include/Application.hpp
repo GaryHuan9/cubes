@@ -48,4 +48,4 @@ private:
 	std::vector<std::unique_ptr<Component>> components;
 };
 
-} // cb
+}

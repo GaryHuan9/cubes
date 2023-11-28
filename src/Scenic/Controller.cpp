@@ -60,4 +60,4 @@ void Controller::update(const Timer& timer)
 	engine->change_camera(*camera);
 }
 
-} // cb
+}

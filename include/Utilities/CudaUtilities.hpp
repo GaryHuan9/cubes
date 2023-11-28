@@ -7,6 +7,7 @@
 #include <cuda_runtime.h>
 
 #define HOST_DEVICE __host__ __device__
+#define HOST_DEVICE_NODISCARD [[nodiscard]] __host__ __device__
 
 namespace cb
 {
@@ -67,4 +68,4 @@ inline constexpr T&& cuda_forward(std::remove_reference_t<T>&& value) noexcept
 	return static_cast<T&&>(value);
 }
 
-} // cb
+}

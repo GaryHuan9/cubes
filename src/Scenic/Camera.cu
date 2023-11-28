@@ -1,22 +1,10 @@
 #include "Scenic/Camera.hpp"
-#include "Rendering/Ray.hpp"
+#include "Rendering/Structures.hpp"
 #include "Utilities/Vector.hpp"
-#include "Utilities/CudaUtilities.hpp"
-
-#include <numbers>
+#include "Utilities/Math.hpp"
 
 namespace cb
 {
-
-static float to_radians(float angle)
-{
-	return angle * (std::numbers::pi_v<float> / 180.0f);
-}
-
-static float to_degrees(float angle)
-{
-	return angle * (180.0f / std::numbers::pi_v<float>);
-}
 
 HOST_DEVICE
 static Float2 rotate(const Float2& direction, float angle)
@@ -84,4 +72,4 @@ Ray Camera::get_ray(Float2 uv)
 	return { position, direction };
 }
 
-} // cb
+}

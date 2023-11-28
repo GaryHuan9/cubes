@@ -16,4 +16,4 @@ static std::vector<uint8_t> read_file(const std::string& filename)
 }
 
 
-} // cb
+}

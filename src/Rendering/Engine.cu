@@ -1,11 +1,38 @@
 #include "Rendering/Engine.hpp"
-#include "Rendering/Packets.hpp"
+#include "Rendering/Structures.hpp"
 #include "Rendering/Kernels.hpp"
-#include "Rendering/Accumulator.hpp"
 #include "Scenic/Camera.hpp"
 
 namespace cb
 {
+
+Engine::Engine()
+{
+	cuda_check(cudaMalloc(&camera, sizeof(Camera)));
+
+	paths = CudaArray<Path>(Capacity);
+	trace_queries = CudaVector<TraceQuery>(Capacity);
+	material_queries = CudaVector<MaterialQuery>(Capacity);
+	escape_packets = CudaVector<EscapedPacket>(Capacity);
+}
+
+Engine::~Engine() = default;
+
+void Engine::change_resolution(const UInt2& new_resolution)
+{
+	if (resolution == new_resolution) return;
+	resolution = new_resolution;
+
+	uint32_t count = resolution.x() * resolution.y();
+	accumulators = CudaArray<Accumulator>(count);
+	accumulators.clear();
+}
+
+void Engine::change_camera(const Camera& new_camera)
+{
+	cuda_copy(camera, &new_camera);
+	accumulators.clear();
+}
 
 class KernelLaunch
 {
@@ -41,49 +68,41 @@ private:
 	dim3 block_size;
 };
 
-Engine::Engine()
-{
-	cuda_check(cudaMalloc(&camera, sizeof(Camera)));
-	new_path_packets = CudaArray<NewPathPackets>(Capacity);
-	trace_packets = CudaVector<TracePackets>(Capacity);
-	hit_packets = CudaArray<HitPacket>(Capacity);
-}
-
-Engine::~Engine() = default;
-
-void Engine::change_resolution(const UInt2& new_resolution)
-{
-	if (resolution == new_resolution) return;
-	resolution = new_resolution;
-
-	uint32_t count = resolution.x() * resolution.y();
-	accumulators = CudaArray<Accumulator>(count);
-	accumulators.clear();
-}
-
-void Engine::change_camera(const Camera& new_camera)
-{
-	cuda_copy(camera, &new_camera);
-	accumulators.clear();
-}
-
 void Engine::render()
 {
-	trace_packets.clear();
+	cuda_check(cudaDeviceSynchronize());
 
-	scan_offset %= resolution.x() * resolution.y();
-	KernelLaunch(Capacity).launch(kernels::render_begin, resolution, scan_offset, Capacity, new_path_packets);
-	scan_offset += Capacity;
+	trace_queries.clear();
+	material_queries.clear();
+	escape_packets.clear();
 
-	KernelLaunch(Capacity).launch(kernels::new_path, resolution, camera, new_path_packets, trace_packets);
-	KernelLaunch(Capacity).launch(kernels::trace_rays, trace_packets, hit_packets);
-	KernelLaunch(Capacity).launch(kernels::render_end, resolution, trace_packets, hit_packets, accumulators);
+	KernelLaunch launcher(Capacity);
+
+	index_start %= resolution.x() * resolution.y();
+	launcher.launch(kernels::new_path, paths, resolution, index_start, camera, trace_queries);
+	index_start += Capacity;
+
+	for (size_t depth = 0; depth < 16; ++depth)
+	{
+		launcher.launch(kernels::trace, trace_queries);
+		launcher.launch(kernels::shade, trace_queries, material_queries, escape_packets);
+
+		cuda_check(cudaDeviceSynchronize());
+		trace_queries.clear();
+
+		launcher.launch(kernels::diffuse, material_queries);
+		launcher.launch(kernels::advance, material_queries, trace_queries, paths, accumulators);
+		launcher.launch(kernels::escaped, escape_packets, paths, accumulators);
+
+		cuda_check(cudaDeviceSynchronize());
+		material_queries.clear();
+		escape_packets.clear();
+	}
 }
 
 void Engine::output(cudaSurfaceObject_t surface_object) const
 {
-	//	KernelLaunch(resolution).launch(kernels::test, resolution, accumulators, 0.0f);
 	KernelLaunch(resolution).launch(kernels::output, resolution, accumulators, surface_object);
 }
 
-} // cb
+}

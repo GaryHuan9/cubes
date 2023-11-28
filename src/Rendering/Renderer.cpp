@@ -76,4 +76,4 @@ void Renderer::clean_resources()
 	surface_object = {};
 }
 
-} // cb
+}

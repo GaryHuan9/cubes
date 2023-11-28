@@ -39,4 +39,4 @@ private:
 	cudaSurfaceObject_t surface_object{};
 };
 
-} // cb
+}

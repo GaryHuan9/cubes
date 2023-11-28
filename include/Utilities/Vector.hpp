@@ -187,4 +187,4 @@ private:
 
 #undef HOST_DEVICE_CONSTEXPR
 
-} // cb
+}

@@ -188,4 +188,4 @@ static void configure_colors(ImGuiStyle& style)
 	style.Colors[ImGuiCol_ModalWindowDimBg] = with_alpha(white1, Alpha0);
 }
 
-} // cb
+}

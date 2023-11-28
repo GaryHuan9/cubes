@@ -134,4 +134,4 @@ private:
 	friend CudaVector<T>;
 };
 
-} // cb
+}

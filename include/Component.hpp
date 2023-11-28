@@ -22,4 +22,4 @@ protected:
 	sf::RenderWindow& window;
 };
 
-} // cb
+}

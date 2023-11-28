@@ -25,8 +25,7 @@ public:
 
 	void move_position(const Float3& local_delta);
 
-	[[nodiscard]]
-	HOST_DEVICE
+	HOST_DEVICE_NODISCARD
 	Ray get_ray(Float2 uv);
 
 private:
@@ -36,4 +35,4 @@ private:
 	float forward_distance{};
 };
 
-} // cb
+}

@@ -28,12 +28,13 @@ private:
 	UInt2 resolution;
 	Camera* camera{};
 
-	uint32_t scan_offset{};
+	uint32_t index_start{};
 
+	CudaArray<Path> paths;
 	CudaArray<Accumulator> accumulators;
-	CudaArray<NewPathPackets> new_path_packets;
-	CudaVector<TracePackets> trace_packets;
-	CudaArray<HitPacket> hit_packets;
+	CudaVector<TraceQuery> trace_queries;
+	CudaVector<MaterialQuery> material_queries;
+	CudaVector<EscapedPacket> escape_packets;
 };
 
-} // cb
+}

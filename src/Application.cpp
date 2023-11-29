@@ -70,6 +70,12 @@ void Application::run()
 					window->setView(sf::View(size / 2.0f, size));
 					break;
 				}
+				case sf::Event::KeyPressed:
+				{
+					if (!window->hasFocus() || event.key.code != sf::Keyboard::Key::F1) break;
+					find_component<Renderer>()->render_file("render.png");
+					break;
+				}
 				default: break;
 			}
 		}

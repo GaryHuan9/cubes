@@ -2,6 +2,7 @@
 #include "Rendering/Structures.hpp"
 #include "Rendering/Kernels.hpp"
 #include "Scenic/Camera.hpp"
+#include "Utilities/Image.hpp"
 
 namespace cb
 {
@@ -60,7 +61,7 @@ void Engine::change_resolution(const UInt2& new_resolution)
 	if (resolution == new_resolution) return;
 	resolution = new_resolution;
 
-	uint32_t count = resolution.x() * resolution.y();
+	uint32_t count = resolution.product();
 	accumulators = CudaArray<Accumulator>(count);
 	reset_render();
 }
@@ -74,30 +75,19 @@ void Engine::change_camera(const Camera& new_camera)
 void Engine::reset_render()
 {
 	accumulators.clear();
-	index_start = resolution.x() * resolution.y() / 2;
-	index_start -= Capacity / 2;
+	current_index = resolution.product() / 2;
+	current_index -= Capacity / 2;
 }
 
-void Engine::render()
+void Engine::start_render(uint32_t start_index)
 {
-	cudaEvent_t start_event, end_event;
-	cudaEventCreate(&start_event);
-	cudaEventCreate(&end_event);
-	cudaEventRecord(start_event);
-
-	cuda_check(cudaDeviceSynchronize());
-
 	trace_queries.clear();
 	material_queries.clear();
 	escape_packets.clear();
 
 	KernelLaunch launcher(Capacity);
 
-	index_start %= resolution.x() * resolution.y();
-	size_t start = index_start;
-	index_start += Capacity;
-
-	launcher.launch(kernels::new_path, paths, resolution, start, camera, trace_queries);
+	launcher.launch(kernels::new_path, paths, resolution, start_index, randoms, camera, trace_queries);
 
 	for (size_t depth = 0; depth < 16; ++depth)
 	{
@@ -116,19 +106,23 @@ void Engine::render()
 		escape_packets.clear();
 	}
 
-	launcher.launch(kernels::accumulate, paths, start, accumulators);
-
-	cudaEventRecord(end_event);
-	cudaEventSynchronize(end_event);
-
-	//	float milliseconds;
-	//	cuda_check(cudaEventElapsedTime(&milliseconds, start_event, end_event));
-	//	std::printf("Sampling took %f ms\n", milliseconds);
+	launcher.launch(kernels::accumulate, paths, start_index, accumulators);
 }
 
 void Engine::output(cudaSurfaceObject_t surface_object) const
 {
-	KernelLaunch(resolution).launch(kernels::output, resolution, accumulators, surface_object);
+	KernelLaunch(resolution).launch(kernels::output_surface, resolution, accumulators, surface_object);
+}
+
+void Engine::output(const std::string& filename) const
+{
+	size_t count = resolution.product();
+	CudaArray<uint32_t> buffer_device(count);
+	auto buffer_host = std::make_unique<uint32_t[]>(count);
+
+	KernelLaunch(resolution).launch(kernels::output_buffer, resolution, accumulators, buffer_device);
+	cuda_check(cudaMemcpy(buffer_host.get(), buffer_device.data(), count * sizeof(uint32_t), cudaMemcpyDefault));
+	Image::write_png(filename, resolution.x(), resolution.y(), buffer_host.get());
 }
 
 }

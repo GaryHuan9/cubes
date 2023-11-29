@@ -6,8 +6,10 @@
 #include "SFML/Window.hpp"
 #include "SFML/Graphics.hpp"
 #include "SFML/OpenGL.hpp"
+
 #include <cuda_gl_interop.h>
 #include <cuda_runtime_api.h>
+#include <chrono>
 
 namespace cb
 {
@@ -32,10 +34,40 @@ void Renderer::update(const Timer& timer)
 
 	if (new_resolution != resolution) change_resolution(new_resolution);
 
-	engine->render();
+	engine->start_render();
 	engine->output(surface_object);
 	cuda_check(cudaDeviceSynchronize());
 	window.draw(*sprite);
+}
+
+void Renderer::render_file(const std::string& filename) const
+{
+	constexpr uint32_t ResolutionScale = 2;
+	constexpr uint32_t SamplesPerPixel = 128;
+
+	UInt2 new_resolution = resolution * ResolutionScale;
+	engine->change_resolution(new_resolution);
+	cuda_check(cudaDeviceSynchronize());
+
+	std::cout << "Starting render of " << new_resolution << " pixels at ";
+	std::cout << SamplesPerPixel << " samples per pixel..." << std::endl;
+
+	using namespace std::chrono;
+
+	auto start = high_resolution_clock::now();
+
+	engine->render(SamplesPerPixel);
+	cuda_check(cudaDeviceSynchronize());
+
+	auto end = high_resolution_clock::now();
+
+	uint64_t duration = duration_cast<milliseconds>(end - start).count();
+	std::cout << "Rendering completed in " << duration << " milliseconds" << std::endl;
+
+	engine->output(filename);
+	engine->change_resolution(resolution);
+
+	std::cout << "Output saved to " << filename << std::endl;
 }
 
 void Renderer::change_resolution(const UInt2& new_resolution)

@@ -21,7 +21,7 @@ __global__
 void new_random(Array<curandState> randoms);
 
 __global__
-void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Camera* camera, List<TraceQuery> trace_queries);
+void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Array<curandState> randoms, Camera* camera, List<TraceQuery> trace_queries);
 
 __global__
 void trace(List<TraceQuery> trace_queries);
@@ -42,6 +42,9 @@ __global__
 void accumulate(Array<Path> paths, uint32_t index_start, Array<Accumulator> accumulators);
 
 __global__
-void output(UInt2 resolution, Array<Accumulator> accumulators, cudaSurfaceObject_t surface);
+void output_surface(UInt2 resolution, Array<Accumulator> accumulators, cudaSurfaceObject_t surface);
+
+__global__
+void output_buffer(UInt2 resolution, Array<Accumulator> accumulators, Array<uint32_t> array);
 
 }

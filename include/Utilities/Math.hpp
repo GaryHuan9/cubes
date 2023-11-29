@@ -51,6 +51,12 @@ inline Float3 cross(const Float3& value0, const Float3& value1)
 }
 
 HOST_DEVICE
+inline Float3 reflect(const Float3& value, const Float3& normal)
+{
+	return normal * (2.0f * value.dot(normal)) - value;
+}
+
+HOST_DEVICE
 inline float luminance(const Float3& value)
 {
 	return value.dot(Float3(0.212671f, 0.715160f, 0.072169f));

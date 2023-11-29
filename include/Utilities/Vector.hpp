@@ -65,6 +65,10 @@ public:
 	template<typename U>
 	HOST_DEVICE_CONSTEXPR Vector<U, D> as() const { return Vector<U, D>(static_cast<U>(field), inner.template as<U>()); }
 
+	HOST_DEVICE_CONSTEXPR T product() const { return field * inner.product(); }
+
+	HOST_DEVICE_CONSTEXPR T sum() const { return field + inner.sum(); }
+
 	HOST_DEVICE_CONSTEXPR T dot(V value) const { return field * value.field + inner.dot(value.inner); }
 
 	HOST_DEVICE_CONSTEXPR T squared_magnitude() const { return dot(*this); }
@@ -152,6 +156,10 @@ public:
 
 	template<typename U>
 	HOST_DEVICE_CONSTEXPR Vector<U, 1> as() const { return Vector<U, 1>(static_cast<U>(field)); }
+
+	HOST_DEVICE_CONSTEXPR T product() const { return field; }
+
+	HOST_DEVICE_CONSTEXPR T sum() const { return field; }
 
 	HOST_DEVICE_CONSTEXPR T dot(V value) const { return field * value.field; }
 

@@ -23,6 +23,8 @@ public:
 	void initialize() override;
 	void update(const Timer& timer) override;
 
+	void render_file(const std::string& filename) const;
+
 private:
 	void change_resolution(const UInt2& new_resolution);
 

@@ -18,20 +18,23 @@ void new_random(Array<curandState> randoms)
 }
 
 __global__
-void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Camera* camera, List<TraceQuery> trace_queries)
+void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Array<curandState> randoms, Camera* camera, List<TraceQuery> trace_queries)
 {
 	uint32_t index = get_thread_index1D();
 	if (index >= paths.size()) return;
 
 	uint32_t result_index = index_start + index;
-	uint32_t count = resolution.x() * resolution.y();
-	while (result_index >= count) result_index -= count;
+	uint32_t wrap = resolution.product();
+	while (result_index >= wrap) result_index -= wrap;
 
 	uint32_t y = result_index / resolution.x();
 	uint32_t x = result_index - y * resolution.x();
 	assert(UInt2(x, y) < resolution);
 
-	Float2 uv = Float2(UInt2(x, y)) - Float2(resolution) * 0.5f;
+	curandState* random = &randoms[index];
+
+	Float2 offset = Float2(curand_uniform(random), curand_uniform(random));
+	Float2 uv = Float2(UInt2(x, y)) + offset - Float2(resolution) * 0.5f;
 	float multiplier = 1.0f / static_cast<float>(resolution.x());
 	Ray ray = camera->get_ray(uv * multiplier);
 
@@ -124,22 +127,54 @@ void shade(const List<TraceQuery> trace_queries, List<MaterialQuery> material_qu
 }
 
 HOST_DEVICE
+static Float2 project_disk(float radius, float angle)
+{
+	Float2 disk;
+	sincosf(angle, &disk.y(), &disk.x());
+	return disk * radius;
+}
+
+HOST_DEVICE
 static Float3 cosine_hemisphere(const Float2& sample)
 {
 	constexpr float Tau = std::numbers::pi_v<float> * 2.0f;
 	float radius = sqrtf(sample.x());
 	float angle = Tau * sample.y();
 
-	Float2 disk;
-	sincosf(angle, &disk.y(), &disk.x());
-	disk *= radius;
-
+	Float2 disk = project_disk(radius, angle);
 	float z = 1.0f - disk.squared_magnitude();
 	return Float3(disk.x(), disk.y(), sqrtf(z));
 }
 
+HOST_DEVICE
+static Float3 uniform_sphere(const Float2& sample)
+{
+	constexpr float Tau = std::numbers::pi_v<float> * 2.0f;
+	float z = sample.x() * 2.0f - 1.0f;
+	float radius = sqrtf(1.0f - z * z);
+	float angle = Tau * sample.y();
+
+	Float2 disk = project_disk(radius, angle);
+	return Float3(disk.x(), disk.y(), z);
+}
+
 __global__
 void diffuse(List<MaterialQuery> material_queries)
+{
+	uint32_t index = get_thread_index1D();
+	if (index >= material_queries.size()) return;
+	auto& query = material_queries[index];
+
+	Float3 incident = cosine_hemisphere(query.sample);
+	constexpr float PiR = 1.0f / std::numbers::pi_v<float>;
+
+	float pdf = incident.z() * PiR;
+	if (query.get_outgoing().z() < 0.0f) incident.z() *= -1.0f;
+	query.set_sampled(incident, Float3(0.8f) * PiR, pdf);
+}
+
+__global__
+void conductor(List<MaterialQuery> material_queries)
 {
 	uint32_t index = get_thread_index1D();
 	if (index >= material_queries.size()) return;
@@ -195,19 +230,33 @@ void accumulate(const Array<Path> paths, uint32_t index_start, Array<Accumulator
 	accumulators[result_index].insert(path.get_result());
 }
 
+__device__
+static uint32_t convert(UInt2 resolution, Array<Accumulator> accumulators, UInt2 position)
+{
+	Float3 color = accumulators[position.y() * resolution.x() + position.x()].current();
+	auto convert = [] HOST_DEVICE(float value) { return min((uint32_t)(sqrtf(value) * 256.0f), 255); };
+	return 0xFF000000 | (convert(color.x()) << 16) | (convert(color.y()) << 8) | convert(color.z());
+}
+
 __global__
-void output(UInt2 resolution, Array<Accumulator> accumulators, cudaSurfaceObject_t surface)
+void output_surface(UInt2 resolution, Array<Accumulator> accumulators, cudaSurfaceObject_t surface)
 {
 	UInt2 position = get_thread_index2D();
 	if (!(position < resolution)) return;
 
-	Float3 color = accumulators[position.y() * resolution.x() + position.x()].current();
-	auto convert = [] __device__(float value) { return min((uint32_t)(sqrtf(value) * 256.0f), 255); };
-	uint32_t value = 0xFF000000 | (convert(color.x()) << 16) | (convert(color.y()) << 8) | convert(color.z());
-
 	int x = static_cast<int>(position.x() * sizeof(uint32_t));
 	int y = static_cast<int>(resolution.y() - position.y() - 1);
-	surf2Dwrite(value, surface, x, y);
+	surf2Dwrite(convert(resolution, accumulators, position), surface, x, y);
+}
+
+__global__
+void output_buffer(UInt2 resolution, Array<Accumulator> accumulators, Array<uint32_t> array)
+{
+	UInt2 position = get_thread_index2D();
+	if (!(position < resolution)) return;
+
+	uint32_t index = (resolution.y() - position.y() - 1) * resolution.x() + position.x();
+	array[index] = convert(resolution, accumulators, position);
 }
 
 }

@@ -129,8 +129,7 @@ public:
 	__device__
 	void clear()
 	{
-		size_type result = atomicAnd(count, size_type(0));
-		assert(result == size_type(0));
+		atomicAnd(count, size_type(0));
 	}
 
 private:

@@ -23,9 +23,9 @@ void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Array<c
 	uint32_t thread_index = get_thread_index();
 	if (thread_index >= paths.size()) return;
 
+	uint32_t bounds = resolution.product();
 	uint32_t result_index = index_start + thread_index;
-	uint32_t wrap = resolution.product();
-	while (result_index >= wrap) result_index -= wrap;
+	while (result_index >= bounds) result_index -= bounds;
 
 	uint32_t y = result_index / resolution.x();
 	uint32_t x = result_index - y * resolution.x();

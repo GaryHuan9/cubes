@@ -48,18 +48,21 @@ void Engine::reset_render()
 
 void Engine::start_render(uint32_t start_index)
 {
-	Launcher(kernels::list_clear<TraceQuery, MaterialQuery, EscapedPacket>).launch(trace_queries, material_queries, escape_packets);
+	auto clear_list = []<typename... Ts>(CudaVector<Ts>& ... lists) { Launcher(kernels::list_clear<Ts...>).launch(lists...); };
+
+	clear_list(trace_queries, material_queries, escape_packets);
 	Launcher(kernels::new_path, Capacity).launch(paths, resolution, start_index, randoms, camera, trace_queries);
 
 	for (size_t depth = 0; depth < 16; ++depth)
 	{
 		Launcher(kernels::trace, Capacity).launch(trace_queries);
 		Launcher(kernels::shade, Capacity).launch(trace_queries, material_queries, escape_packets, randoms);
-		Launcher(kernels::list_clear<TraceQuery>).launch(trace_queries);
+		clear_list(trace_queries);
 
 		Launcher(kernels::diffuse, Capacity).launch(material_queries, paths, trace_queries, DiffuseParameters(Float3(0.8f)));
+		//		Launcher(kernels::conductor, Capacity).launch(material_queries, paths, trace_queries, ConductorParameters(Float3(0.8f), 0.1f));
 		Launcher(kernels::escaped, Capacity).launch(escape_packets, paths);
-		Launcher(kernels::list_clear<MaterialQuery, EscapedPacket>).launch(material_queries, escape_packets);
+		clear_list(material_queries, escape_packets);
 	}
 
 	Launcher(kernels::accumulate, Capacity).launch(paths, start_index, accumulators);

@@ -30,10 +30,10 @@ __global__
 void shade(List<TraceQuery> trace_queries, List<MaterialQuery> material_queries, List<EscapedPacket> escaped_packets, Array<curandState> randoms);
 
 __global__
-void diffuse(List<MaterialQuery> material_queries);
+void diffuse(List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, DiffuseParameters parameters);
 
 __global__
-void advance(List<MaterialQuery> material_queries, List<TraceQuery> trace_queries, Array<Path> paths);
+void conductor(List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, ConductorParameters parameters);
 
 __global__
 void escaped(List<EscapedPacket> escaped_packets, Array<Path> paths);

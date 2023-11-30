@@ -91,7 +91,7 @@ public:
 	bool bounce(const Float3& value)
 	{
 		energy *= value;
-		return luminance(energy) > 1E-5f;
+		return positive(luminance(energy));
 	}
 
 private:
@@ -173,57 +173,39 @@ class MaterialQuery
 public:
 	__device__
 	explicit MaterialQuery(const TraceQuery& query, const Float2& sample) :
-		path_index(query.path_index), point(query.get_point()),
-		normal(query.get_normal()), sample(sample)
-	{
-		OrthonormalTransform transform(normal);
-		Float3 outgoing_world = -query.ray.direction;
-		outgoing = transform.apply_inverse(outgoing_world);
-	}
+		path_index(query.path_index), sample(sample), point(query.get_point()),
+		normal(query.get_normal()), outgoing(transform().apply_inverse(-query.ray.direction)) {}
 
 	const size_t path_index;
+	const Float2 sample;
 	const Float3 point;
 	const Float3 normal;
-	const Float2 sample;
+	const Float3 outgoing;
 
 	HOST_DEVICE_NODISCARD
-	Float3 get_outgoing() const
+	OrthonormalTransform transform() const
 	{
-		return outgoing;
+		return OrthonormalTransform(normal);
 	}
+};
 
-	HOST_DEVICE_NODISCARD
-	Float3 get_incident_world() const
-	{
-		OrthonormalTransform transform(normal);
-		return transform.apply_forward(incident);
-	}
-
-	HOST_DEVICE_NODISCARD
-	Float3 get_scatter() const
-	{
-		return scatter;
-	}
-
-	HOST_DEVICE_NODISCARD
-	float get_pdf() const
-	{
-		return pdf;
-	}
-
+class DiffuseParameters
+{
+public:
 	HOST_DEVICE
-	void set_sampled(const Float3& new_incident, const Float3& new_scatter, float new_pdf)
-	{
-		incident = new_incident;
-		scatter = new_scatter;
-		pdf = new_pdf;
-	}
+	explicit DiffuseParameters(const Float3& albedo) : albedo(albedo) {}
 
-private:
-	Float3 outgoing;
-	Float3 incident;
-	Float3 scatter;
-	float pdf{};
+	const Float3 albedo;
+};
+
+class ConductorParameters
+{
+public:
+	HOST_DEVICE
+	ConductorParameters(const Float3& albedo, float roughness) : albedo(albedo), roughness(roughness) {}
+
+	const Float3 albedo;
+	const float roughness;
 };
 
 }

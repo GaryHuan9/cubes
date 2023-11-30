@@ -34,6 +34,18 @@ inline bool almost_one(float value, float epsilon = 3E-5f)
 }
 
 HOST_DEVICE
+inline bool positive(float value, float epsilon = 8E-7f)
+{
+	return value > epsilon;
+}
+
+HOST_DEVICE
+inline float sqrt0(float value)
+{
+	return sqrt(max(value, 0.0f));
+}
+
+HOST_DEVICE
 static float difference_of_products(float value0, float value1, float value2, float value3)
 {
 	float product = value2 * value3;

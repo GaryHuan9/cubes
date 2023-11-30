@@ -32,6 +32,8 @@ class Path;
 class TraceQuery;
 class EscapedPacket;
 class MaterialQuery;
+class DiffuseParameters;
+class ConductorParameters;
 
 class Controller;
 class Scene;

@@ -55,7 +55,7 @@ static bool try_intersect_sphere(const Float3& position, float radius, const Ray
 	if (extend2 < 0.0f) return false;
 
 	//Find appropriate distance
-	float extend = sqrtf(extend2);
+	float extend = sqrt(extend2);
 	distance = center - extend;
 
 	if (distance < 0.0f) distance = center + extend;
@@ -130,7 +130,7 @@ HOST_DEVICE
 static Float2 project_disk(float radius, float angle)
 {
 	Float2 disk;
-	sincosf(angle, &disk.y(), &disk.x());
+	sincos(angle, &disk.y(), &disk.x());
 	return disk * radius;
 }
 
@@ -138,12 +138,12 @@ HOST_DEVICE
 static Float3 cosine_hemisphere(const Float2& sample)
 {
 	constexpr float Tau = std::numbers::pi_v<float> * 2.0f;
-	float radius = sqrtf(sample.x());
+	float radius = sqrt(sample.x());
 	float angle = Tau * sample.y();
 
 	Float2 disk = project_disk(radius, angle);
 	float z = 1.0f - disk.squared_magnitude();
-	return Float3(disk.x(), disk.y(), sqrtf(z));
+	return Float3(disk.x(), disk.y(), sqrt0(z));
 }
 
 HOST_DEVICE
@@ -158,51 +158,60 @@ static Float3 uniform_sphere(const Float2& sample)
 	return Float3(disk.x(), disk.y(), z);
 }
 
-__global__
-void diffuse(List<MaterialQuery> material_queries)
+HOST_DEVICE
+static float cosine_phi(const Float3& direction) { return direction.z(); }
+
+HOST_DEVICE
+static void make_same_side(const Float3& outgoing, Float3& incident)
 {
-	uint32_t index = get_thread_index1D();
-	if (index >= material_queries.size()) return;
-	auto& query = material_queries[index];
+	if (outgoing.z() * incident.z() >= 0.0f) return;
+	incident.z() = -incident.z();
+}
 
-	Float3 incident = cosine_hemisphere(query.sample);
-	constexpr float PiR = 1.0f / std::numbers::pi_v<float>;
+__device__
+static void advance(const MaterialQuery& query, const Float3& incident, const Float3& scatter, Array<Path> paths, List<TraceQuery> trace_queries)
+{
+	assert(almost_one(incident.squared_magnitude()));
 
-	float pdf = incident.z() * PiR;
-	if (query.get_outgoing().z() < 0.0f) incident.z() *= -1.0f;
-	query.set_sampled(incident, Float3(0.8f) * PiR, pdf);
+	auto& path = paths[query.path_index];
+	//	float cos = abs(cosine_phi(incident)); //Currently disabled because both materials don't need it
+	if (!path.bounce(scatter/* * cos*/)) return;
+
+	Float3 incident_world = query.transform().apply_forward(incident);
+	Ray ray(query.point + incident_world * 1E-3f, incident_world);
+	trace_queries.emplace_back(query.path_index, ray);
 }
 
 __global__
-void conductor(List<MaterialQuery> material_queries)
-{
-	uint32_t index = get_thread_index1D();
-	if (index >= material_queries.size()) return;
-	auto& query = material_queries[index];
-
-	Float3 incident = cosine_hemisphere(query.sample);
-	constexpr float PiR = 1.0f / std::numbers::pi_v<float>;
-
-	float pdf = incident.z() * PiR;
-	if (query.get_outgoing().z() < 0.0f) incident.z() *= -1.0f;
-	query.set_sampled(incident, Float3(0.8f) * PiR, pdf);
-}
-
-__global__
-void advance(List<MaterialQuery> material_queries, List<TraceQuery> trace_queries, Array<Path> paths)
+void diffuse(const List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, const DiffuseParameters parameters)
 {
 	uint32_t index = get_thread_index1D();
 	if (index >= material_queries.size()) return;
 	const auto& query = material_queries[index];
-	auto& path = paths[query.path_index];
 
-	float pdf = query.get_pdf();
-	Float3 incident = query.get_incident_world().normalized();
-	Float3 scatter = query.get_scatter() * incident.dot(query.normal) / pdf;
+	Float3 incident = cosine_hemisphere(query.sample);
+	make_same_side(query.outgoing, incident);
+	advance(query, incident, parameters.albedo, paths, trace_queries);
+}
 
-	if (almost_zero(pdf) || !path.bounce(scatter)) return;
-	Ray ray(query.point + incident * 1E-4f, incident);
-	trace_queries.emplace_back(query.path_index, ray);
+__global__
+void conductor(const List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, const ConductorParameters parameters)
+{
+	uint32_t index = get_thread_index1D();
+	if (index >= material_queries.size()) return;
+	const auto& query = material_queries[index];
+
+	Float3 incident = -query.outgoing;
+
+	if (!almost_zero(parameters.roughness))
+	{
+		Float3 sphere = uniform_sphere(query.sample);
+		incident += sphere * parameters.roughness;
+		incident = incident.normalized();
+	}
+
+	make_same_side(query.outgoing, incident);
+	advance(query, incident, parameters.albedo, paths, trace_queries);
 }
 
 __global__
@@ -214,7 +223,7 @@ void escaped(const List<EscapedPacket> escaped_packets, Array<Path> paths)
 	auto& path = paths[packet.path_index];
 
 	//TODO fancier evaluate infinite
-	path.contribute(Float3(0.1f));
+	path.contribute(packet.direction * packet.direction);
 }
 
 __global__
@@ -234,7 +243,7 @@ __device__
 static uint32_t convert(UInt2 resolution, Array<Accumulator> accumulators, UInt2 position)
 {
 	Float3 color = accumulators[position.y() * resolution.x() + position.x()].current();
-	auto convert = [] HOST_DEVICE(float value) { return min((uint32_t)(sqrtf(value) * 256.0f), 255); };
+	auto convert = [] HOST_DEVICE(float value) { return min((uint32_t)(sqrt(value) * 256.0f), 255); };
 	return 0xFF000000 | (convert(color.x()) << 16) | (convert(color.y()) << 8) | convert(color.z());
 }
 

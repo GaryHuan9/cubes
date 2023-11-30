@@ -97,8 +97,7 @@ void Engine::start_render(uint32_t start_index)
 		cuda_check(cudaDeviceSynchronize());
 		trace_queries.clear();
 
-		launcher.launch(kernels::diffuse, material_queries);
-		launcher.launch(kernels::advance, material_queries, trace_queries, paths);
+		launcher.launch(kernels::diffuse, material_queries, paths, trace_queries, DiffuseParameters(Float3(0.8f)));
 		launcher.launch(kernels::escaped, escape_packets, paths);
 
 		cuda_check(cudaDeviceSynchronize());

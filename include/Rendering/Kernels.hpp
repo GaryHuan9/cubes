@@ -20,6 +20,13 @@ using List = cb::CudaVector<T>::Accessor;
 __global__
 void new_random(Array<curandState> randoms);
 
+template<typename... Ts>
+__global__
+void list_clear(List<Ts>... lists)
+{
+	([&] HOST_DEVICE { lists.clear(); }(), ...);
+}
+
 __global__
 void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Array<curandState> randoms, Camera* camera, List<TraceQuery> trace_queries);
 

@@ -8,6 +8,9 @@
 template<typename T>
 static inline T atomicAdd(T*, T);
 
+template<typename T>
+static inline T atomicAnd(T*, T);
+
 namespace cb
 {
 
@@ -121,6 +124,13 @@ public:
 		size_type index = atomicAdd(count, size_type(1));
 		assert(index < capacity());
 		return array.emplace(index, cuda_forward<Arguments>(arguments)...);
+	}
+
+	__device__
+	void clear()
+	{
+		size_type result = atomicAnd(count, size_type(0));
+		assert(result == size_type(0));
 	}
 
 private:

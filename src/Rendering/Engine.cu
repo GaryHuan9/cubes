@@ -48,26 +48,18 @@ void Engine::reset_render()
 
 void Engine::start_render(uint32_t start_index)
 {
-	trace_queries.clear();
-	material_queries.clear();
-	escape_packets.clear();
-
+	Launcher(kernels::list_clear<TraceQuery, MaterialQuery, EscapedPacket>).launch(trace_queries, material_queries, escape_packets);
 	Launcher(kernels::new_path, Capacity).launch(paths, resolution, start_index, randoms, camera, trace_queries);
 
 	for (size_t depth = 0; depth < 16; ++depth)
 	{
 		Launcher(kernels::trace, Capacity).launch(trace_queries);
 		Launcher(kernels::shade, Capacity).launch(trace_queries, material_queries, escape_packets, randoms);
-
-		cuda_check(cudaDeviceSynchronize());
-		trace_queries.clear();
+		Launcher(kernels::list_clear<TraceQuery>).launch(trace_queries);
 
 		Launcher(kernels::diffuse, Capacity).launch(material_queries, paths, trace_queries, DiffuseParameters(Float3(0.8f)));
 		Launcher(kernels::escaped, Capacity).launch(escape_packets, paths);
-
-		cuda_check(cudaDeviceSynchronize());
-		material_queries.clear();
-		escape_packets.clear();
+		Launcher(kernels::list_clear<MaterialQuery, EscapedPacket>).launch(material_queries, escape_packets);
 	}
 
 	Launcher(kernels::accumulate, Capacity).launch(paths, start_index, accumulators);

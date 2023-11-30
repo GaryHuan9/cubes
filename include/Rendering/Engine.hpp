@@ -26,12 +26,9 @@ public:
 
 	void start_render()
 	{
-		for (size_t i = 0; i < 10; ++i)
-		{
-			current_index %= resolution.product();
-			start_render(current_index);
-			current_index += Capacity;
-		}
+		current_index %= resolution.product();
+		start_render(current_index);
+		current_index += Capacity;
 	}
 
 	void render(uint32_t samples_per_pixel)

@@ -13,13 +13,7 @@ namespace cb
 {
 
 __device__
-uint32_t get_thread_index1D();
-
-__device__
-UInt2 get_thread_index2D();
-
-__device__
-UInt3 get_thread_index3D();
+uint32_t get_thread_index();
 
 __host__
 void cuda_check(cudaError error);

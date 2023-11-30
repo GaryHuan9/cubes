@@ -12,18 +12,18 @@ namespace cb::kernels
 __global__
 void new_random(Array<curandState> randoms)
 {
-	uint32_t index = get_thread_index1D();
-	if (index >= randoms.size()) return;
-	curand_init(42, index, 0, &randoms[index]);
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= randoms.size()) return;
+	curand_init(42, thread_index, 0, &randoms[thread_index]);
 }
 
 __global__
 void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Array<curandState> randoms, Camera* camera, List<TraceQuery> trace_queries)
 {
-	uint32_t index = get_thread_index1D();
-	if (index >= paths.size()) return;
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= paths.size()) return;
 
-	uint32_t result_index = index_start + index;
+	uint32_t result_index = index_start + thread_index;
 	uint32_t wrap = resolution.product();
 	while (result_index >= wrap) result_index -= wrap;
 
@@ -31,15 +31,15 @@ void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Array<c
 	uint32_t x = result_index - y * resolution.x();
 	assert(UInt2(x, y) < resolution);
 
-	curandState* random = &randoms[index];
+	curandState* random = &randoms[thread_index];
 
 	Float2 offset = Float2(curand_uniform(random), curand_uniform(random));
 	Float2 uv = Float2(UInt2(x, y)) + offset - Float2(resolution) * 0.5f;
 	float multiplier = 1.0f / static_cast<float>(resolution.x());
 	Ray ray = camera->get_ray(uv * multiplier);
 
-	paths.emplace(index);
-	trace_queries.emplace_back(index, ray);
+	paths.emplace(thread_index);
+	trace_queries.emplace_back(thread_index, ray);
 }
 
 HOST_DEVICE
@@ -96,9 +96,9 @@ static bool try_intersect_scene(const Ray& ray, float& distance, Float3& normal)
 __global__
 void trace(List<TraceQuery> trace_queries)
 {
-	uint32_t index = get_thread_index1D();
-	if (index >= trace_queries.size()) return;
-	auto& query = trace_queries[index];
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= trace_queries.size()) return;
+	auto& query = trace_queries[thread_index];
 
 	float distance;
 	uint32_t material = 0;
@@ -111,13 +111,13 @@ void trace(List<TraceQuery> trace_queries)
 __global__
 void shade(const List<TraceQuery> trace_queries, List<MaterialQuery> material_queries, List<EscapedPacket> escaped_packets, Array<curandState> randoms)
 {
-	uint32_t index = get_thread_index1D();
-	if (index >= trace_queries.size()) return;
-	const auto& query = trace_queries[index];
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= trace_queries.size()) return;
+	const auto& query = trace_queries[thread_index];
 
 	if (query.hit())
 	{
-		curandState* random = &randoms[index];
+		curandState* random = &randoms[thread_index];
 		Float2 sample(curand_uniform(random), curand_uniform(random));
 		material_queries.emplace_back(query, sample);
 
@@ -185,9 +185,9 @@ static void advance(const MaterialQuery& query, const Float3& incident, const Fl
 __global__
 void diffuse(const List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, const DiffuseParameters parameters)
 {
-	uint32_t index = get_thread_index1D();
-	if (index >= material_queries.size()) return;
-	const auto& query = material_queries[index];
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= material_queries.size()) return;
+	const auto& query = material_queries[thread_index];
 
 	Float3 incident = cosine_hemisphere(query.sample);
 	make_same_side(query.outgoing, incident);
@@ -197,9 +197,9 @@ void diffuse(const List<MaterialQuery> material_queries, Array<Path> paths, List
 __global__
 void conductor(const List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, const ConductorParameters parameters)
 {
-	uint32_t index = get_thread_index1D();
-	if (index >= material_queries.size()) return;
-	const auto& query = material_queries[index];
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= material_queries.size()) return;
+	const auto& query = material_queries[thread_index];
 
 	Float3 incident = -query.outgoing;
 
@@ -217,9 +217,9 @@ void conductor(const List<MaterialQuery> material_queries, Array<Path> paths, Li
 __global__
 void escaped(const List<EscapedPacket> escaped_packets, Array<Path> paths)
 {
-	uint32_t index = get_thread_index1D();
-	if (index >= escaped_packets.size()) return;
-	const auto& packet = escaped_packets[index];
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= escaped_packets.size()) return;
+	const auto& packet = escaped_packets[thread_index];
 	auto& path = paths[packet.path_index];
 
 	//TODO fancier evaluate infinite
@@ -229,20 +229,20 @@ void escaped(const List<EscapedPacket> escaped_packets, Array<Path> paths)
 __global__
 void accumulate(const Array<Path> paths, uint32_t index_start, Array<Accumulator> accumulators)
 {
-	uint32_t index = get_thread_index1D();
-	if (index >= paths.size()) return;
-	const auto& path = paths[index];
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= paths.size()) return;
+	const auto& path = paths[thread_index];
 
-	uint32_t result_index = index_start + index;
+	uint32_t result_index = index_start + thread_index;
 	uint32_t count = accumulators.size();
 	while (result_index >= count) result_index -= count;
 	accumulators[result_index].insert(path.get_result());
 }
 
 __device__
-static uint32_t convert(UInt2 resolution, Array<Accumulator> accumulators, UInt2 position)
+static uint32_t convert(const Accumulator& accumulator)
 {
-	Float3 color = accumulators[position.y() * resolution.x() + position.x()].current();
+	Float3 color = accumulator.current();
 	auto convert = [] HOST_DEVICE(float value) { return min((uint32_t)(sqrt(value) * 256.0f), 255); };
 	return 0xFF000000 | (convert(color.x()) << 16) | (convert(color.y()) << 8) | convert(color.z());
 }
@@ -250,22 +250,24 @@ static uint32_t convert(UInt2 resolution, Array<Accumulator> accumulators, UInt2
 __global__
 void output_surface(UInt2 resolution, Array<Accumulator> accumulators, cudaSurfaceObject_t surface)
 {
-	UInt2 position = get_thread_index2D();
-	if (!(position < resolution)) return;
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= accumulators.size()) return;
 
-	int x = static_cast<int>(position.x() * sizeof(uint32_t));
-	int y = static_cast<int>(resolution.y() - position.y() - 1);
-	surf2Dwrite(convert(resolution, accumulators, position), surface, x, y);
+	int x = static_cast<int>(thread_index % resolution.x() * sizeof(uint32_t));
+	int y = static_cast<int>(resolution.y() - thread_index / resolution.x() - 1);
+	surf2Dwrite(convert(accumulators[thread_index]), surface, x, y);
 }
 
 __global__
 void output_buffer(UInt2 resolution, Array<Accumulator> accumulators, Array<uint32_t> array)
 {
-	UInt2 position = get_thread_index2D();
-	if (!(position < resolution)) return;
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= accumulators.size()) return;
 
-	uint32_t index = (resolution.y() - position.y() - 1) * resolution.x() + position.x();
-	array[index] = convert(resolution, accumulators, position);
+	uint32_t x = thread_index % resolution.x();
+	uint32_t y = thread_index / resolution.x();
+	uint32_t index = (resolution.y() - y - 1) * resolution.x() + x;
+	array[index] = convert(accumulators[thread_index]);
 }
 
 }

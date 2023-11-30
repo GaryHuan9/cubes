@@ -1,0 +1,5 @@
+three simple spheres with diffused material (4K, 128SPP) :
+107260ms - CPU
+3770ms - Blender
+2859ms - 257331fff9dbe63ba9348b98a255de1bbba21ec1 - initial platform benchmark
+2225ms - 53c2b65c392b1f2ddc439e98276ea0124df10edf - removed separate kernel for advancing ray

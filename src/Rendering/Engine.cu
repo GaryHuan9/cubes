@@ -1,45 +1,12 @@
 #include "Rendering/Engine.hpp"
 #include "Rendering/Structures.hpp"
 #include "Rendering/Kernels.hpp"
+#include "Rendering/Launcher.hpp"
 #include "Scenic/Camera.hpp"
 #include "Utilities/Image.hpp"
 
 namespace cb
 {
-
-class KernelLaunch
-{
-public:
-	explicit KernelLaunch(unsigned int region, unsigned int block_size = 256)
-	{
-		block_count = dim3((region + block_size - 1) / block_size);
-		this->block_size = dim3(block_size);
-	}
-
-	explicit KernelLaunch(const UInt2& region, unsigned int block_size = 16)
-	{
-		UInt2 count = (region + UInt2(block_size - 1)) / block_size;
-		block_count = dim3(count.x(), count.y());
-		this->block_size = dim3(block_size, block_size);
-	}
-
-	explicit KernelLaunch(const UInt3& region, unsigned int block_size = 8)
-	{
-		UInt3 count = (region + UInt3(block_size - 1)) / block_size;
-		block_count = dim3(count.x(), count.y(), count.z());
-		this->block_size = dim3(block_size, block_size, block_size);
-	}
-
-	template<typename Kernel, typename... Arguments>
-	void launch(const Kernel& kernel, const Arguments& ... arguments)
-	{
-		kernel<<<block_count, block_size>>>(arguments...);
-	}
-
-private:
-	dim3 block_count;
-	dim3 block_size;
-};
 
 Engine::Engine()
 {
@@ -47,7 +14,7 @@ Engine::Engine()
 
 	paths = CudaArray<Path>(Capacity);
 	randoms = CudaArray<curandState>(Capacity);
-	KernelLaunch(Capacity).launch(kernels::new_random, randoms);
+	Launcher(kernels::new_random, Capacity).launch(randoms);
 
 	trace_queries = CudaVector<TraceQuery>(Capacity);
 	material_queries = CudaVector<MaterialQuery>(Capacity);
@@ -85,32 +52,30 @@ void Engine::start_render(uint32_t start_index)
 	material_queries.clear();
 	escape_packets.clear();
 
-	KernelLaunch launcher(Capacity);
-
-	launcher.launch(kernels::new_path, paths, resolution, start_index, randoms, camera, trace_queries);
+	Launcher(kernels::new_path, Capacity).launch(paths, resolution, start_index, randoms, camera, trace_queries);
 
 	for (size_t depth = 0; depth < 16; ++depth)
 	{
-		launcher.launch(kernels::trace, trace_queries);
-		launcher.launch(kernels::shade, trace_queries, material_queries, escape_packets, randoms);
+		Launcher(kernels::trace, Capacity).launch(trace_queries);
+		Launcher(kernels::shade, Capacity).launch(trace_queries, material_queries, escape_packets, randoms);
 
 		cuda_check(cudaDeviceSynchronize());
 		trace_queries.clear();
 
-		launcher.launch(kernels::diffuse, material_queries, paths, trace_queries, DiffuseParameters(Float3(0.8f)));
-		launcher.launch(kernels::escaped, escape_packets, paths);
+		Launcher(kernels::diffuse, Capacity).launch(material_queries, paths, trace_queries, DiffuseParameters(Float3(0.8f)));
+		Launcher(kernels::escaped, Capacity).launch(escape_packets, paths);
 
 		cuda_check(cudaDeviceSynchronize());
 		material_queries.clear();
 		escape_packets.clear();
 	}
 
-	launcher.launch(kernels::accumulate, paths, start_index, accumulators);
+	Launcher(kernels::accumulate, Capacity).launch(paths, start_index, accumulators);
 }
 
 void Engine::output(cudaSurfaceObject_t surface_object) const
 {
-	KernelLaunch(resolution).launch(kernels::output_surface, resolution, accumulators, surface_object);
+	Launcher(kernels::output_surface, resolution.product()).launch(resolution, accumulators, surface_object);
 }
 
 void Engine::output(const std::string& filename) const
@@ -119,7 +84,7 @@ void Engine::output(const std::string& filename) const
 	CudaArray<uint32_t> buffer_device(count);
 	auto buffer_host = std::make_unique<uint32_t[]>(count);
 
-	KernelLaunch(resolution).launch(kernels::output_buffer, resolution, accumulators, buffer_device);
+	Launcher(kernels::output_buffer, resolution.product()).launch(resolution, accumulators, buffer_device);
 	cuda_check(cudaMemcpy(buffer_host.get(), buffer_device.data(), count * sizeof(uint32_t), cudaMemcpyDefault));
 	Image::write_png(filename, resolution.x(), resolution.y(), buffer_host.get());
 }

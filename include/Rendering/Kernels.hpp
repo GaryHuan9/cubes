@@ -31,16 +31,19 @@ __global__
 void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Array<curandState> randoms, Camera* camera, List<TraceQuery> trace_queries);
 
 __global__
-void trace(List<TraceQuery> trace_queries);
+void trace(List<TraceQuery> trace_queries, List<MaterialQuery> material_queries, List<EscapedPacket> escaped_packets);
 
 __global__
-void shade(List<TraceQuery> trace_queries, List<MaterialQuery> material_queries, List<EscapedPacket> escaped_packets, Array<curandState> randoms);
+void pre_material(List<MaterialQuery> material_queries, Array<curandState> randoms);
 
 __global__
 void diffuse(List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, DiffuseParameters parameters);
 
 __global__
 void conductor(List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, ConductorParameters parameters);
+
+__global__
+void emissive(List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, EmissiveParameters parameters);
 
 __global__
 void escaped(List<EscapedPacket> escaped_packets, Array<Path> paths);

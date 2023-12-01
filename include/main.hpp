@@ -34,6 +34,7 @@ class EscapedPacket;
 class MaterialQuery;
 class DiffuseParameters;
 class ConductorParameters;
+class EmissiveParameters;
 
 class Controller;
 class Scene;

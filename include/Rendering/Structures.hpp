@@ -107,55 +107,6 @@ public:
 
 	const size_t path_index;
 	const Ray ray;
-
-	HOST_DEVICE_NODISCARD
-	bool hit() const
-	{
-		return isfinite(distance);
-	}
-
-	HOST_DEVICE_NODISCARD
-	float get_distance() const
-	{
-		assert(hit());
-		return distance;
-	}
-
-	HOST_DEVICE_NODISCARD
-	uint32_t get_material() const
-	{
-		assert(hit());
-		return material;
-	}
-
-	HOST_DEVICE_NODISCARD
-	Float3 get_normal() const
-	{
-		assert(hit());
-		return normal;
-	}
-
-	HOST_DEVICE_NODISCARD
-	Float3 get_point() const
-	{
-		return ray.get_point(get_distance());
-	}
-
-	HOST_DEVICE
-	bool try_record(float new_distance, uint32_t new_material, const Float3& new_normal)
-	{
-		if (new_distance >= distance) return false;
-
-		distance = new_distance;
-		material = new_material;
-		normal = new_normal;
-		return true;
-	}
-
-private:
-	float distance = INFINITY;
-	uint32_t material{};
-	Float3 normal;
 };
 
 class EscapedPacket
@@ -172,21 +123,35 @@ class MaterialQuery
 {
 public:
 	__device__
-	explicit MaterialQuery(const TraceQuery& query, const Float2& sample) :
-		path_index(query.path_index), sample(sample), point(query.get_point()),
-		normal(query.get_normal()), outgoing(transform().apply_inverse(-query.ray.direction)) {}
+	MaterialQuery(const TraceQuery& query, float distance, uint32_t material, const Float3& normal) :
+		path_index(query.path_index), material(material), normal(normal),
+		point(query.ray.get_point(distance)), outgoing(query.ray.direction) {}
 
 	const size_t path_index;
-	const Float2 sample;
-	const Float3 point;
+	const uint32_t material;
 	const Float3 normal;
-	const Float3 outgoing;
+	const Float3 point;
 
 	HOST_DEVICE_NODISCARD
 	OrthonormalTransform transform() const
 	{
 		return OrthonormalTransform(normal);
 	}
+
+	HOST_DEVICE_NODISCARD Float3 get_outgoing() const { return outgoing; }
+
+	HOST_DEVICE_NODISCARD Float2 get_sample() const { return sample; }
+
+	HOST_DEVICE
+	void initialize(const Float2& new_sample)
+	{
+		outgoing = transform().apply_inverse(-outgoing);
+		sample = new_sample;
+	}
+
+private:
+	Float3 outgoing;
+	Float2 sample;
 };
 
 class DiffuseParameters
@@ -206,6 +171,15 @@ public:
 
 	const Float3 albedo;
 	const float roughness;
+};
+
+class EmissiveParameters
+{
+public:
+	HOST_DEVICE
+	explicit EmissiveParameters(const Float3& albedo) : albedo(albedo) {}
+
+	const Float3 albedo;
 };
 
 }

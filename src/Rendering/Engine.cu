@@ -55,8 +55,8 @@ void Engine::start_render(uint32_t start_index)
 
 	for (size_t depth = 0; depth < 16; ++depth)
 	{
-		Launcher(kernels::trace, Capacity).launch(trace_queries);
-		Launcher(kernels::shade, Capacity).launch(trace_queries, material_queries, escape_packets, randoms);
+		Launcher(kernels::trace, Capacity).launch(trace_queries, material_queries, escape_packets);
+		Launcher(kernels::pre_material, Capacity).launch(material_queries, randoms);
 		clear_list(trace_queries);
 
 		Launcher(kernels::diffuse, Capacity).launch(material_queries, paths, trace_queries, DiffuseParameters(Float3(0.8f)));

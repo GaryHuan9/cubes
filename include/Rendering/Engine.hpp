@@ -65,6 +65,8 @@ private:
 	CudaVector<TraceQuery> trace_queries;
 	CudaVector<MaterialQuery> material_queries;
 	CudaVector<EscapedPacket> escape_packets;
+
+
 };
 
 }

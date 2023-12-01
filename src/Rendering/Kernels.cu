@@ -65,7 +65,7 @@ static bool try_intersect_sphere(const Float3& position, float radius, const Ray
 }
 
 __device__
-static bool try_intersect_scene(const Ray& ray, float& distance, Float3& normal)
+static bool try_intersect_scene(const Ray& ray, float& distance, uint32_t& material, Float3& normal)
 {
 	constexpr size_t Count = 4;
 	__constant__ static const Float4 Spheres[Count] = { Float4(0.0f, 1.0f, 0.0f, 1.0f),
@@ -73,10 +73,13 @@ static bool try_intersect_scene(const Ray& ray, float& distance, Float3& normal)
 	                                                    Float4(-1.0f, 3.0f, 1.0f, 0.5f),
 	                                                    Float4(0.0f, -100.0f, 0.0f, 100.0f) };
 
+	__constant__ static const uint32_t Materials[Count] = { 0, 0, 0, 0 };
+
 	distance = INFINITY;
 
-	for (const Float4& sphere : Spheres)
+	for (size_t i = 0; i < Count; ++i)
 	{
+		const Float4& sphere = Spheres[i];
 		Float3 position(sphere.x(), sphere.y(), sphere.z());
 		float radius(sphere.w());
 		float new_distance;
@@ -84,6 +87,7 @@ static bool try_intersect_scene(const Ray& ray, float& distance, Float3& normal)
 		if (try_intersect_sphere(position, radius, ray, new_distance) && new_distance < distance)
 		{
 			distance = new_distance;
+			material = Materials[i];
 			normal = ray.get_point(distance) - position;
 		}
 	}
@@ -94,36 +98,34 @@ static bool try_intersect_scene(const Ray& ray, float& distance, Float3& normal)
 }
 
 __global__
-void trace(List<TraceQuery> trace_queries)
-{
-	uint32_t thread_index = get_thread_index();
-	if (thread_index >= trace_queries.size()) return;
-	auto& query = trace_queries[thread_index];
-
-	float distance;
-	uint32_t material = 0;
-	Float3 normal;
-
-	if (!try_intersect_scene(query.ray, distance, normal)) return;
-	query.try_record(distance, material, normal);
-}
-
-__global__
-void shade(const List<TraceQuery> trace_queries, List<MaterialQuery> material_queries, List<EscapedPacket> escaped_packets, Array<curandState> randoms)
+void trace(const List<TraceQuery> trace_queries, List<MaterialQuery> material_queries, List<EscapedPacket> escaped_packets)
 {
 	uint32_t thread_index = get_thread_index();
 	if (thread_index >= trace_queries.size()) return;
 	const auto& query = trace_queries[thread_index];
 
-	if (query.hit())
-	{
-		curandState* random = &randoms[thread_index];
-		Float2 sample(curand_uniform(random), curand_uniform(random));
-		material_queries.emplace_back(query, sample);
+	float distance;
+	uint32_t material;
+	Float3 normal;
 
-		//TODO find material queue
+	if (!try_intersect_scene(query.ray, distance, material, normal))
+	{
+		escaped_packets.emplace_back(query.path_index, query.ray.direction);
+		return;
 	}
-	else escaped_packets.emplace_back(query.path_index, query.ray.direction);
+
+	material_queries.emplace_back(query, distance, material, normal);
+}
+
+__global__
+void pre_material(List<MaterialQuery> material_queries, Array<curandState> randoms)
+{
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= material_queries.size()) return;
+	auto& query = material_queries[thread_index];
+	curandState* random = &randoms[thread_index];
+
+	query.initialize(Float2(curand_uniform(random), curand_uniform(random)));
 }
 
 HOST_DEVICE
@@ -189,8 +191,8 @@ void diffuse(const List<MaterialQuery> material_queries, Array<Path> paths, List
 	if (thread_index >= material_queries.size()) return;
 	const auto& query = material_queries[thread_index];
 
-	Float3 incident = cosine_hemisphere(query.sample);
-	make_same_side(query.outgoing, incident);
+	Float3 incident = cosine_hemisphere(query.get_sample());
+	make_same_side(query.get_outgoing(), incident);
 	advance(query, incident, parameters.albedo, paths, trace_queries);
 }
 
@@ -201,16 +203,16 @@ void conductor(const List<MaterialQuery> material_queries, Array<Path> paths, Li
 	if (thread_index >= material_queries.size()) return;
 	const auto& query = material_queries[thread_index];
 
-	Float3 incident = -query.outgoing;
+	Float3 incident = -query.get_outgoing();
 
 	if (!almost_zero(parameters.roughness))
 	{
-		Float3 sphere = uniform_sphere(query.sample);
+		Float3 sphere = uniform_sphere(query.get_sample());
 		incident += sphere * parameters.roughness;
 		incident = incident.normalized();
 	}
 
-	make_same_side(query.outgoing, incident);
+	make_same_side(query.get_outgoing(), incident);
 	advance(query, incident, parameters.albedo, paths, trace_queries);
 }
 

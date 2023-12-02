@@ -16,7 +16,7 @@ public:
 	explicit CudaArray(size_type size = 0) : length(size)
 	{
 		if (size == 0) return;
-		cuda_check(cudaMalloc(&pointer, size * sizeof(T)));
+		cuda_malloc(pointer, size);
 	}
 
 	CudaArray(CudaArray&& source) noexcept
@@ -48,7 +48,7 @@ public:
 	size_type size() const { return length; }
 
 	[[nodiscard]]
-	const T* data() const { return pointer; }
+	T* data() const { return pointer; }
 
 	void clear()
 	{

@@ -20,6 +20,18 @@ void cuda_check(cudaError error);
 
 template<typename T>
 __host__
+inline void cuda_malloc(T*& pointer, size_t count = 1)
+{
+	assert(pointer == nullptr);
+#if NDEBUG
+	cuda_check(cudaMalloc(&pointer, count * sizeof(T)));
+#else
+	cuda_check(cudaMallocManaged(&pointer, count * sizeof(T)));
+#endif
+}
+
+template<typename T>
+__host__
 inline void cuda_free_checked(T*& pointer)
 {
 	assert(pointer != nullptr);

@@ -73,7 +73,7 @@ static bool try_intersect_scene(const Ray& ray, float& distance, uint32_t& mater
 	                                                    Float4(-1.0f, 3.0f, 1.0f, 0.5f),
 	                                                    Float4(0.0f, -100.0f, 0.0f, 100.0f) };
 
-	__constant__ static const uint32_t Materials[Count] = { 0, 0, 0, 0 };
+	__constant__ static const uint32_t Materials[Count] = { 1, 0, 2, 0 };
 
 	distance = INFINITY;
 
@@ -118,13 +118,14 @@ void trace(const List<TraceQuery> trace_queries, List<MaterialQuery> material_qu
 }
 
 __global__
-void pre_material(List<MaterialQuery> material_queries, Array<curandState> randoms)
+void pre_material(List<MaterialQuery> material_queries, Array<List<uint32_t>> material_indices, Array<curandState> randoms)
 {
 	uint32_t thread_index = get_thread_index();
 	if (thread_index >= material_queries.size()) return;
 	auto& query = material_queries[thread_index];
 	curandState* random = &randoms[thread_index];
 
+	material_indices[query.material].emplace_back(thread_index);
 	query.initialize(Float2(curand_uniform(random), curand_uniform(random)));
 }
 
@@ -185,11 +186,12 @@ static void advance(const MaterialQuery& query, const Float3& incident, const Fl
 }
 
 __global__
-void diffuse(const List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, const DiffuseParameters parameters)
+void diffuse(const List<uint32_t> material_indices, const List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, const DiffuseParameters parameters)
 {
 	uint32_t thread_index = get_thread_index();
-	if (thread_index >= material_queries.size()) return;
-	const auto& query = material_queries[thread_index];
+	if (thread_index >= material_indices.size()) return;
+	uint32_t index = material_indices[thread_index];
+	const auto& query = material_queries[index];
 
 	Float3 incident = cosine_hemisphere(query.get_sample());
 	make_same_side(query.get_outgoing(), incident);
@@ -197,11 +199,12 @@ void diffuse(const List<MaterialQuery> material_queries, Array<Path> paths, List
 }
 
 __global__
-void conductor(const List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, const ConductorParameters parameters)
+void conductor(const List<uint32_t> material_indices, const List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, const ConductorParameters parameters)
 {
 	uint32_t thread_index = get_thread_index();
-	if (thread_index >= material_queries.size()) return;
-	const auto& query = material_queries[thread_index];
+	if (thread_index >= material_indices.size()) return;
+	uint32_t index = material_indices[thread_index];
+	const auto& query = material_queries[index];
 
 	Float3 incident = -query.get_outgoing();
 
@@ -217,6 +220,31 @@ void conductor(const List<MaterialQuery> material_queries, Array<Path> paths, Li
 }
 
 __global__
+void dielectric(const List<uint32_t> material_indices, List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, const DielectricParameters parameters)
+{
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= material_indices.size()) return;
+	uint32_t index = material_indices[thread_index];
+	const auto& query = material_queries[index];
+
+	//	make_same_side(query.get_outgoing(), incident);
+	//	advance(query, incident, parameters.albedo, paths, trace_queries);
+}
+
+__global__
+void emissive(const List<uint32_t> material_indices, List<MaterialQuery> material_queries, Array<Path> paths, const EmissiveParameters parameters)
+{
+	uint32_t thread_index = get_thread_index();
+	if (thread_index >= material_indices.size()) return;
+	uint32_t index = material_indices[thread_index];
+	const auto& query = material_queries[index];
+
+	if (cosine_phi(query.get_outgoing()) < 0.0f) return;
+	auto& path = paths[query.path_index];
+	path.contribute(parameters.albedo);
+}
+
+__global__
 void escaped(const List<EscapedPacket> escaped_packets, Array<Path> paths)
 {
 	uint32_t thread_index = get_thread_index();
@@ -224,7 +252,7 @@ void escaped(const List<EscapedPacket> escaped_packets, Array<Path> paths)
 	const auto& packet = escaped_packets[thread_index];
 	auto& path = paths[packet.path_index];
 
-	//TODO fancier evaluate infinite
+	//	path.contribute(Float3(0.1f));
 	path.contribute(packet.direction * packet.direction);
 }
 

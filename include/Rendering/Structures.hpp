@@ -173,6 +173,16 @@ public:
 	const float roughness;
 };
 
+class DielectricParameters
+{
+public:
+	HOST_DEVICE
+	DielectricParameters(const Float3& albedo, float refractive_index) : albedo(albedo), refractive_index(refractive_index) {}
+
+	const Float3 albedo;
+	const float refractive_index;
+};
+
 class EmissiveParameters
 {
 public:

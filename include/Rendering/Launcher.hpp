@@ -27,6 +27,9 @@ public:
 	void launch(const Arguments& ... arguments)
 	{
 		kernel<<<block_count, block_size>>>(arguments...);
+#ifndef NDEBUG
+		cuda_check(cudaDeviceSynchronize());
+#endif
 	}
 
 #endif

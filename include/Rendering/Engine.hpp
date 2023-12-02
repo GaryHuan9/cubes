@@ -5,6 +5,7 @@
 #include "Utilities/CudaArray.hpp"
 #include "Utilities/CudaVector.hpp"
 
+#include <variant>
 #include <curand_kernel.h>
 
 namespace cb
@@ -66,7 +67,12 @@ private:
 	CudaVector<MaterialQuery> material_queries;
 	CudaVector<EscapedPacket> escape_packets;
 
+	std::vector<std::variant<
+		DiffuseParameters, ConductorParameters,
+		DielectricParameters, EmissiveParameters>> materials;
 
+	std::vector<CudaVector<uint32_t>> material_indices;
+	CudaArray<CudaVector<uint32_t>::Accessor> material_indices_device;
 };
 
 }

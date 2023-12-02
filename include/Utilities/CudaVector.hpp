@@ -25,7 +25,7 @@ public:
 	explicit CudaVector(size_type capacity = 0) : array(capacity)
 	{
 		if (capacity == 0) return;
-		cuda_check(cudaMalloc(&count, sizeof(size_type)));
+		cuda_malloc(count);
 		clear();
 	}
 
@@ -68,12 +68,14 @@ public:
 	size_type capacity() const { return array.size(); }
 
 	[[nodiscard]]
-	const T* data() const { return array.data(); }
+	T* data() const { return array.data(); }
 
-	void clear()
+	void clear(bool sync = false, cudaStream_t stream = nullptr)
 	{
 		if (capacity() == 0) return;
-		cuda_check(cudaMemset(count, 0, sizeof(size_type)));
+
+		if (sync) cuda_check(cudaMemset(count, 0, sizeof(size_type)));
+		else cuda_check(cudaMemsetAsync(count, 0, sizeof(size_type), stream));
 	}
 
 	operator Accessor() const // NOLINT(*-explicit-constructor)

@@ -10,7 +10,7 @@ namespace cb
 
 Engine::Engine()
 {
-	cuda_check(cudaMalloc(&camera, sizeof(Camera)));
+	cuda_malloc(camera);
 
 	paths = CudaArray<Path>(Capacity);
 	randoms = CudaArray<curandState>(Capacity);
@@ -19,6 +19,18 @@ Engine::Engine()
 	trace_queries = CudaVector<TraceQuery>(Capacity);
 	material_queries = CudaVector<MaterialQuery>(Capacity);
 	escape_packets = CudaVector<EscapedPacket>(Capacity);
+
+	materials.emplace_back(DiffuseParameters(Float3(0.8f)));
+	materials.emplace_back(ConductorParameters(Float3(0.8f), 0.1f));
+	materials.emplace_back(EmissiveParameters(Float3(2.0f)));
+
+	for (size_t i = 0; i < materials.size(); ++i) material_indices.emplace_back(Capacity);
+	material_indices_device = CudaArray<CudaVector<uint32_t>::Accessor>(materials.size());
+
+	//TODO: this copying is VERY unsafe! But doing this otherwise is super messy
+	void* destination = reinterpret_cast<void*>(material_indices_device.data());
+	size_t length = sizeof(decltype(material_indices)::value_type) * material_indices.size();
+	cuda_check(cudaMemcpy(destination, material_indices.data(), length, cudaMemcpyDefault));
 }
 
 Engine::~Engine() = default;
@@ -56,11 +68,35 @@ void Engine::start_render(uint32_t start_index)
 	for (size_t depth = 0; depth < 16; ++depth)
 	{
 		Launcher(kernels::trace, Capacity).launch(trace_queries, material_queries, escape_packets);
-		Launcher(kernels::pre_material, Capacity).launch(material_queries, randoms);
 		clear_list(trace_queries);
 
-		Launcher(kernels::diffuse, Capacity).launch(material_queries, paths, trace_queries, DiffuseParameters(Float3(0.8f)));
-		//		Launcher(kernels::conductor, Capacity).launch(material_queries, paths, trace_queries, ConductorParameters(Float3(0.8f), 0.1f));
+		Launcher(kernels::pre_material, Capacity).launch(material_queries, material_indices_device, randoms);
+
+		for (size_t i = 0; i < materials.size(); ++i)
+		{
+			const auto& material = materials[i];
+			auto& indices = material_indices[i];
+
+			if (std::holds_alternative<DiffuseParameters>(material))
+			{
+				Launcher(kernels::diffuse, Capacity).launch(indices, material_queries, paths, trace_queries, std::get<DiffuseParameters>(material));
+			}
+			else if (std::holds_alternative<ConductorParameters>(material))
+			{
+				Launcher(kernels::conductor, Capacity).launch(indices, material_queries, paths, trace_queries, std::get<ConductorParameters>(material));
+			}
+			else if (std::holds_alternative<DielectricParameters>(material))
+			{
+				Launcher(kernels::dielectric, Capacity).launch(indices, material_queries, paths, trace_queries, std::get<DielectricParameters>(material));
+			}
+			else if (std::holds_alternative<EmissiveParameters>(material))
+			{
+				Launcher(kernels::emissive, Capacity).launch(indices, material_queries, paths, std::get<EmissiveParameters>(material));
+			}
+
+			clear_list(indices);
+		}
+
 		Launcher(kernels::escaped, Capacity).launch(escape_packets, paths);
 		clear_list(material_queries, escape_packets);
 	}

@@ -34,16 +34,19 @@ __global__
 void trace(List<TraceQuery> trace_queries, List<MaterialQuery> material_queries, List<EscapedPacket> escaped_packets);
 
 __global__
-void pre_material(List<MaterialQuery> material_queries, Array<curandState> randoms);
+void pre_material(List<MaterialQuery> material_queries, Array<List<uint32_t>> material_indices, Array<curandState> randoms);
 
 __global__
-void diffuse(List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, DiffuseParameters parameters);
+void diffuse(List<uint32_t> material_indices, List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, DiffuseParameters parameters);
 
 __global__
-void conductor(List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, ConductorParameters parameters);
+void conductor(List<uint32_t> material_indices, List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, ConductorParameters parameters);
 
 __global__
-void emissive(List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, EmissiveParameters parameters);
+void dielectric(List<uint32_t> material_indices, List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, DielectricParameters parameters);
+
+__global__
+void emissive(List<uint32_t> material_indices, List<MaterialQuery> material_queries, Array<Path> paths, EmissiveParameters parameters);
 
 __global__
 void escaped(List<EscapedPacket> escaped_packets, Array<Path> paths);

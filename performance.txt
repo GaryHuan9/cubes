@@ -1,5 +1,8 @@
 three simple spheres with diffused material (4K, 128SPP) :
 107260ms - CPU
-3770ms - Blender
+3770ms - Blender OptiX
 2859ms - 257331fff9dbe63ba9348b98a255de1bbba21ec1 - initial platform benchmark
 2225ms - 53c2b65c392b1f2ddc439e98276ea0124df10edf - removed separate kernel for advancing ray
+2038ms - 3119ad2800556f292af43bef6e5c759ea77e2465 - moved vector clearing from host to device
+1939ms - a1cb4f7ff3ad27058f8b3ce922bcd63be9ce274d - shifted responsibility of kernels before materials
+3491ms - ae084a7705c4d15cee1aacfbb7d2c5eada75215c - supports different materials, but slow implementation

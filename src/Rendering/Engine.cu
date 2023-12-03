@@ -60,15 +60,15 @@ void Engine::reset_render()
 
 void Engine::start_render(uint32_t start_index)
 {
-	auto clear_list = []<typename... Ts>(CudaVector<Ts>& ... lists) { Launcher(kernels::list_clear<Ts...>).launch(lists...); };
-
-	clear_list(trace_queries, material_queries, escape_packets);
+	trace_queries.clear_async();
+	material_queries.clear_async();
+	escape_packets.clear_async();
 	Launcher(kernels::new_path, Capacity).launch(paths, resolution, start_index, randoms, camera, trace_queries);
 
 	for (size_t depth = 0; depth < 16; ++depth)
 	{
 		Launcher(kernels::trace, Capacity).launch(trace_queries, material_queries, escape_packets);
-		clear_list(trace_queries);
+		trace_queries.clear_async();
 
 		Launcher(kernels::pre_material, Capacity).launch(material_queries, material_indices_device, randoms);
 
@@ -77,28 +77,23 @@ void Engine::start_render(uint32_t start_index)
 			const auto& material = materials[i];
 			auto& indices = material_indices[i];
 
-			if (std::holds_alternative<DiffuseParameters>(material))
+			auto try_launch = [&]<typename Kernel, typename Parameters>(const Kernel& kernel)
 			{
-				Launcher(kernels::diffuse, Capacity).launch(indices, material_queries, paths, trace_queries, std::get<DiffuseParameters>(material));
-			}
-			else if (std::holds_alternative<ConductorParameters>(material))
-			{
-				Launcher(kernels::conductor, Capacity).launch(indices, material_queries, paths, trace_queries, std::get<ConductorParameters>(material));
-			}
-			else if (std::holds_alternative<DielectricParameters>(material))
-			{
-				Launcher(kernels::dielectric, Capacity).launch(indices, material_queries, paths, trace_queries, std::get<DielectricParameters>(material));
-			}
-			else if (std::holds_alternative<EmissiveParameters>(material))
-			{
-				Launcher(kernels::emissive, Capacity).launch(indices, material_queries, paths, std::get<EmissiveParameters>(material));
-			}
+				if (!std::holds_alternative<Parameters>(material)) return;
+				Launcher(kernel, Capacity).launch(indices, material_queries, paths, trace_queries, std::get<Parameters>(material));
+			};
 
-			clear_list(indices);
+			try_launch.template operator()<decltype(kernels::diffuse), DiffuseParameters>(kernels::diffuse);
+			try_launch.template operator()<decltype(kernels::conductor), ConductorParameters>(kernels::conductor);
+			try_launch.template operator()<decltype(kernels::dielectric), DielectricParameters>(kernels::dielectric);
+			try_launch.template operator()<decltype(kernels::emissive), EmissiveParameters>(kernels::emissive);
 		}
 
 		Launcher(kernels::escaped, Capacity).launch(escape_packets, paths);
-		clear_list(material_queries, escape_packets);
+		material_queries.clear_async();
+		escape_packets.clear_async();
+
+		for (auto& indices : material_indices) indices.clear_async();
 	}
 
 	Launcher(kernels::accumulate, Capacity).launch(paths, start_index, accumulators);

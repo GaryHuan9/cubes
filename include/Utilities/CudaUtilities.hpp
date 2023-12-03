@@ -3,6 +3,7 @@
 #include "main.hpp"
 
 #include <cassert>
+#include <stdexcept>
 #include <type_traits>
 #include <cuda_runtime.h>
 
@@ -12,11 +13,23 @@
 namespace cb
 {
 
+#if __NVCC__
+
 __device__
-uint32_t get_thread_index();
+inline uint32_t get_thread_index()
+{
+	return blockIdx.x * blockDim.x + threadIdx.x;
+}
+
+#endif
 
 __host__
-void cuda_check(cudaError error);
+inline void cuda_check(cudaError error)
+{
+	if (error == cudaError::cudaSuccess) return;
+	std::string error_string(cudaGetErrorString(error));
+	throw std::runtime_error("CUDA error: " + error_string);
+}
 
 template<typename T>
 __host__

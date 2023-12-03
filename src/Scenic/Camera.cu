@@ -9,8 +9,8 @@ namespace cb
 HOST_DEVICE
 static Float2 rotate(const Float2& direction, float angle)
 {
-	float sin = sinf(angle);
-	float cos = cosf(angle);
+	float sin, cos;
+	sincosf(angle, &sin, &cos);
 
 	return Float2(direction.x() * cos - direction.y() * sin,
 	              direction.x() * sin + direction.y() * cos);

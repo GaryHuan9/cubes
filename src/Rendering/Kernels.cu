@@ -232,7 +232,7 @@ void dielectric(const List<uint32_t> material_indices, List<MaterialQuery> mater
 }
 
 __global__
-void emissive(const List<uint32_t> material_indices, List<MaterialQuery> material_queries, Array<Path> paths, const EmissiveParameters parameters)
+void emissive(const List<uint32_t> material_indices, List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, const EmissiveParameters parameters)
 {
 	uint32_t thread_index = get_thread_index();
 	if (thread_index >= material_indices.size()) return;

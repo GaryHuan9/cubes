@@ -70,12 +70,16 @@ public:
 	[[nodiscard]]
 	T* data() const { return array.data(); }
 
-	void clear(bool sync = false, cudaStream_t stream = nullptr)
+	void clear()
 	{
 		if (capacity() == 0) return;
+		cuda_check(cudaMemset(count, 0, sizeof(size_type)));
+	}
 
-		if (sync) cuda_check(cudaMemset(count, 0, sizeof(size_type)));
-		else cuda_check(cudaMemsetAsync(count, 0, sizeof(size_type), stream));
+	void clear_async(cudaStream_t stream = nullptr)
+	{
+		if (capacity() == 0) return;
+		cuda_check(cudaMemsetAsync(count, 0, sizeof(size_type), stream));
 	}
 
 	operator Accessor() const // NOLINT(*-explicit-constructor)
@@ -126,12 +130,6 @@ public:
 		size_type index = atomicAdd(count, size_type(1));
 		assert(index < capacity());
 		return array.emplace(index, cuda_forward<Arguments>(arguments)...);
-	}
-
-	__device__
-	void clear()
-	{
-		atomicAnd(count, size_type(0));
 	}
 
 private:

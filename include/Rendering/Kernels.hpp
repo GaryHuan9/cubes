@@ -20,13 +20,6 @@ using List = cb::CudaVector<T>::Accessor;
 __global__
 void new_random(Array<curandState> randoms);
 
-template<typename... Ts>
-__global__
-void list_clear(List<Ts>... lists)
-{
-	([&] HOST_DEVICE { lists.clear(); }(), ...);
-}
-
 __global__
 void new_path(Array<Path> paths, UInt2 resolution, uint32_t index_start, Array<curandState> randoms, Camera* camera, List<TraceQuery> trace_queries);
 
@@ -46,7 +39,7 @@ __global__
 void dielectric(List<uint32_t> material_indices, List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, DielectricParameters parameters);
 
 __global__
-void emissive(List<uint32_t> material_indices, List<MaterialQuery> material_queries, Array<Path> paths, EmissiveParameters parameters);
+void emissive(List<uint32_t> material_indices, List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, EmissiveParameters parameters);
 
 __global__
 void escaped(List<EscapedPacket> escaped_packets, Array<Path> paths);

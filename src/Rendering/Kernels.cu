@@ -73,7 +73,7 @@ static bool try_intersect_scene(const Ray& ray, float& distance, uint32_t& mater
 	                                                    Float4(-1.0f, 3.0f, 1.0f, 0.5f),
 	                                                    Float4(0.0f, -100.0f, 0.0f, 100.0f) };
 
-	__constant__ static const uint32_t Materials[Count] = { 1, 0, 2, 0 };
+	__constant__ static const uint32_t Materials[Count] = { 2, 1, 3, 0 };
 
 	distance = INFINITY;
 
@@ -162,7 +162,7 @@ static Float3 uniform_sphere(const Float2& sample)
 }
 
 HOST_DEVICE
-static float cosine_phi(const Float3& direction) { return direction.z(); }
+static float cos_phi(const Float3& direction) { return direction.z(); }
 
 HOST_DEVICE
 static void make_same_side(const Float3& outgoing, Float3& incident)
@@ -219,6 +219,43 @@ void conductor(const List<uint32_t> material_indices, const List<MaterialQuery> 
 	advance(query, incident, parameters.albedo, paths, trace_queries);
 }
 
+HOST_DEVICE
+static float schlick_fresnel(float eta_outgoing, float eta_incident, float cos_outgoing, float)
+{
+	float normal_reflectance = (eta_outgoing - eta_incident) / (eta_outgoing + eta_incident);
+	normal_reflectance *= normal_reflectance;
+
+	float cos = 1.0f - abs(cos_outgoing);
+	float cos2 = cos * cos;
+	float cos5 = cos2 * cos2 * cos;
+	return normal_reflectance + (1.0f - normal_reflectance) * cos5;
+}
+
+HOST_DEVICE
+static float fresnel(float eta_outgoing, float eta_incident, float cos_outgoing, float cos_incident)
+{
+	float cos_o = abs(cos_outgoing);
+	float cos_i = abs(cos_incident);
+
+	float para0 = eta_incident * cos_o;
+	float para1 = eta_outgoing * cos_i;
+	float perp0 = eta_outgoing * cos_o;
+	float perp1 = eta_incident * cos_i;
+
+	float para = (para0 - para1) / (para0 + para1);
+	float perp = (perp0 - perp1) / (perp0 + perp1);
+	return (para * para + perp * perp) / 2.0f;
+}
+
+HOST_DEVICE
+static float get_cos_incident(float eta, float cos_outgoing)
+{
+	float sin_outgoing2 = 1.0f - cos_outgoing * cos_outgoing;
+	float sin_incident2 = eta * eta * sin_outgoing2;
+	if (sin_incident2 >= 1.0f) return 0.0f;
+	return sqrt0(1.0f - sin_incident2);
+}
+
 __global__
 void dielectric(const List<uint32_t> material_indices, List<MaterialQuery> material_queries, Array<Path> paths, List<TraceQuery> trace_queries, const DielectricParameters parameters)
 {
@@ -227,8 +264,33 @@ void dielectric(const List<uint32_t> material_indices, List<MaterialQuery> mater
 	uint32_t index = material_indices[thread_index];
 	const auto& query = material_queries[index];
 
-	//	make_same_side(query.get_outgoing(), incident);
-	//	advance(query, incident, parameters.albedo, paths, trace_queries);
+	//Defaults to specular reflection
+	Float3 outgoing = query.get_outgoing();
+	Float3 incident = -outgoing;
+	make_same_side(outgoing, incident);
+
+	//Calculate eta
+	float cos_o = cos_phi(outgoing);
+	float eta_outgoing = 1.0f; //eta above surface
+	float eta_incident = parameters.refractive_index;
+	if (cos_o < 0.0f) cuda_swap(eta_outgoing, eta_incident);
+
+	float eta = eta_outgoing / eta_incident;
+	float cos_i = get_cos_incident(eta, cos_o);
+
+	//Evaluate fresnel
+	float evaluated = fresnel(eta_outgoing, eta_incident, cos_o, cos_i);
+	if (almost_zero(cos_i)) evaluated = 1.0f; //Total internal reflection
+
+	if (query.get_sample().x() > evaluated)
+	{
+		//Specular transmission
+		float z = eta * cos_o + (cos_o < 0.0f ? cos_i : -cos_i);
+		incident = Float3(0.0f, 0.0f, z) - outgoing * eta;
+		incident = incident.normalized();
+	}
+
+	advance(query, incident, parameters.albedo, paths, trace_queries);
 }
 
 __global__
@@ -239,7 +301,7 @@ void emissive(const List<uint32_t> material_indices, List<MaterialQuery> materia
 	uint32_t index = material_indices[thread_index];
 	const auto& query = material_queries[index];
 
-	if (cosine_phi(query.get_outgoing()) < 0.0f) return;
+	if (cos_phi(query.get_outgoing()) < 0.0f) return;
 	auto& path = paths[query.path_index];
 	path.contribute(parameters.albedo);
 }

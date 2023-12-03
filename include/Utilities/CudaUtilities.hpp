@@ -87,4 +87,13 @@ inline constexpr T&& cuda_forward(std::remove_reference_t<T>&& value) noexcept
 	return static_cast<T&&>(value);
 }
 
+template<class T>
+HOST_DEVICE
+inline constexpr void cuda_swap(T& value0, T& value1)
+{
+	T temporary = cuda_move(value0);
+	value0 = cuda_move(value1);
+	value1 = cuda_move(temporary);
+}
+
 }

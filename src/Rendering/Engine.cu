@@ -22,6 +22,7 @@ Engine::Engine()
 
 	materials.emplace_back(DiffuseParameters(Float3(0.8f)));
 	materials.emplace_back(ConductorParameters(Float3(0.8f), 0.1f));
+	materials.emplace_back(DielectricParameters(Float3(0.8f), 1.5f));
 	materials.emplace_back(EmissiveParameters(Float3(2.0f)));
 
 	for (size_t i = 0; i < materials.size(); ++i) material_indices.emplace_back(Capacity);
@@ -77,7 +78,7 @@ void Engine::start_render(uint32_t start_index)
 			const auto& material = materials[i];
 			auto& indices = material_indices[i];
 
-			auto try_launch = [&]<typename Kernel, typename Parameters>(const Kernel& kernel)
+			auto try_launch = [&]<typename Kernel, typename Parameters>(Kernel kernel)
 			{
 				if (!std::holds_alternative<Parameters>(material)) return;
 				Launcher(kernel, Capacity).launch(indices, material_queries, paths, trace_queries, std::get<Parameters>(material));

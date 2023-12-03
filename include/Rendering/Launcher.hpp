@@ -14,7 +14,7 @@ template<typename Kernel>
 class Launcher
 {
 public:
-	explicit Launcher(const Kernel& kernel, uint32_t region = 1) : kernel(kernel), block_count(region), block_size(1)
+	explicit Launcher(Kernel kernel, uint32_t region = 1) : kernel(kernel), block_count(region), block_size(1)
 	{
 		if (region <= 1) return;
 		block_size = get_block_size(kernel);
@@ -35,7 +35,7 @@ public:
 #endif
 
 private:
-	static uint32_t get_block_size(const Kernel& kernel)
+	static uint32_t get_block_size(Kernel kernel)
 	{
 		if (best_block_size > 0) return best_block_size;
 
@@ -46,7 +46,7 @@ private:
 		return best_block_size;
 	}
 
-	const Kernel& kernel;
+	Kernel kernel;
 	uint32_t block_count;
 	uint32_t block_size;
 

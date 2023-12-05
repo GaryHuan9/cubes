@@ -19,8 +19,9 @@ void Controller::initialize()
 {
 	engine = application.find_component<Renderer>()->get_engine();
 
-	camera->set_position(Float3(3.0f, 3.0f, -3.0f));
-	camera->set_rotation(Float2(30.0f, -45.0f));
+	camera->set_position(Float3(25.0f, 35.0f, -50.0f));
+	camera->set_rotation(Float2(27.0f, -27.0f));
+	camera->set_field_of_view(75.0f);
 	engine->change_camera(*camera);
 }
 

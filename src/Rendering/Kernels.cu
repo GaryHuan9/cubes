@@ -64,27 +64,14 @@ static bool try_intersect_sphere(const Float3& position, float radius, const Ray
 	return true;
 }
 
-HOST_DEVICE
-static uint32_t mangle(uint32_t source, uint32_t seed)
-{
-	source *= 0x773598E9u;
-	source += seed /*  */;
-	source ^= source >> 8;
-	source += 0x3B9AEE2Bu;
-	source ^= source << 8;
-	source *= 0x6B49DCD5u;
-	source ^= source >> 8;
-	return source;
-}
-
 __device__
 static bool try_intersect_voxels(const Ray& ray, float& distance, uint32_t& material, Float3& normal)
 {
 	__device__ static constexpr float VoxelSize = 0.1f;
 	__device__ static constexpr float VoxelSizeR = 1.0f / VoxelSize;
-	__device__ static constexpr Int3 GridSize = Int3(200, 40, 15);
+	__device__ static constexpr Int3 GridSize = Int3(16 * 16);
 
-	__device__ static constexpr Float3 Center = Float3(0.0f, 3.0f, 0.0f);
+	__device__ static constexpr Float3 Center = Float3(0.0f, 12.8f, 0.0f);
 	__device__ static constexpr Float3 Extend = Float3(GridSize) / 2.0f;
 	__device__ static constexpr Float3 Offset = Center - Float3(GridSize) / 2.0f * VoxelSize;
 
@@ -171,14 +158,27 @@ static bool try_intersect_voxels(const Ray& ray, float& distance, uint32_t& mate
 
 		if (!(Int3(0) <= position && position < GridSize)) return false;
 
-		uint32_t index = mangle(position.x(), 0) + mangle(position.y(), 1) + mangle(position.z(), 2);
-		bool has_voxel = (mangle(index, 3) & 3) == 0;
+		bool has_voxel = true;
+
+		auto check = []HOST_DEVICE(int32_t value, uint32_t level)
+		{
+			value = (value >> (level * 2)) & 0b11;
+			return (value == 0 || value == 3) ? 1 : 0;
+		};
+
+		for (uint32_t level = 0; level < 4; ++level)
+		{
+			uint32_t edge = 0;
+			edge += check(position.x(), level);
+			edge += check(position.y(), level);
+			edge += check(position.z(), level);
+			has_voxel &= edge >= 2;
+		}
 
 		if (has_voxel)
 		{
 			distance *= VoxelSize;
-			material = mangle(index, 4) & 3;
-			if (material == 3 && (mangle(index, 5) & 3) != 0) material = 0;
+			material = 0;
 			return true;
 		}
 	}
@@ -197,6 +197,17 @@ static bool try_intersect_scene(const Ray& ray, float& distance, uint32_t& mater
 
 	distance = INFINITY;
 	if (!try_intersect_voxels(ray, distance, material, normal)) distance = INFINITY;
+
+	if (ray.direction.y() < 0.0f)
+	{
+		float new_distance = ray.origin.y() / -ray.direction.y();
+		if (new_distance < distance && new_distance >= 0.0f)
+		{
+			distance = new_distance;
+			material = 1;
+			normal = Float3(0.0f, 1.0f, 0.0f);
+		}
+	}
 
 	for (size_t i = 0; i < 0; ++i)
 	{

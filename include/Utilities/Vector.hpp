@@ -87,6 +87,10 @@ public:
 		return as<F>() * multiplier;
 	}
 
+	HOST_DEVICE_CONSTEXPR V min(V value) const { return V(::min(field, value.field), inner.min(value.inner)); }
+
+	HOST_DEVICE_CONSTEXPR V max(V value) const { return V(::max(field, value.field), inner.max(value.inner)); }
+
 	HOST_DEVICE_CONSTEXPR bool operator==(V value) const { return field == value.field && inner == value.inner; }
 
 	HOST_DEVICE_CONSTEXPR bool operator<(V value) const { return field < value.field && inner < value.inner; }
@@ -162,6 +166,10 @@ public:
 	HOST_DEVICE_CONSTEXPR T sum() const { return field; }
 
 	HOST_DEVICE_CONSTEXPR T dot(V value) const { return field * value.field; }
+
+	HOST_DEVICE_CONSTEXPR V min(V value) const { return V(::min(field, value.field)); }
+
+	HOST_DEVICE_CONSTEXPR V max(V value) const { return V(::max(field, value.field)); }
 
 	HOST_DEVICE_CONSTEXPR bool operator==(V value) const { return field == value.field; }
 

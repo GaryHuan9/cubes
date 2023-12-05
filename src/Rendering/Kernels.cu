@@ -64,6 +64,126 @@ static bool try_intersect_sphere(const Float3& position, float radius, const Ray
 	return true;
 }
 
+HOST_DEVICE
+static uint32_t mangle(uint32_t source, uint32_t seed)
+{
+	source *= 0x773598E9u;
+	source += seed /*  */;
+	source ^= source >> 8;
+	source += 0x3B9AEE2Bu;
+	source ^= source << 8;
+	source *= 0x6B49DCD5u;
+	source ^= source >> 8;
+	return source;
+}
+
+__device__
+static bool try_intersect_voxels(const Ray& ray, float& distance, uint32_t& material, Float3& normal)
+{
+	__device__ static constexpr float VoxelSize = 0.1f;
+	__device__ static constexpr float VoxelSizeR = 1.0f / VoxelSize;
+	__device__ static constexpr Int3 GridSize = Int3(200, 40, 15);
+
+	__device__ static constexpr Float3 Center = Float3(0.0f, 3.0f, 0.0f);
+	__device__ static constexpr Float3 Extend = Float3(GridSize) / 2.0f;
+	__device__ static constexpr Float3 Offset = Center - Float3(GridSize) / 2.0f * VoxelSize;
+
+	Float3 origin = (ray.origin - Offset) * VoxelSizeR;
+	Float3 direction_r = Float3(1.0f) / ray.direction;
+
+	//Try to intersect with bounding box
+	Float3 lengths0 = (Float3(0.0f) - origin) * direction_r;
+	Float3 lengths1 = (Extend * 2.0f - origin) * direction_r;
+	Float3 lengths_min = lengths0.min(lengths1);
+	Float3 lengths_max = lengths0.max(lengths1);
+
+	float near = max(lengths_min.x(), max(lengths_min.y(), lengths_min.z()));
+	float far = min(lengths_max.x(), min(lengths_max.y(), lengths_max.z()));
+
+	if (far < near || far < 0.0f) return false;
+	distance = near;
+
+	Int3 position(origin);
+
+	if (distance > 0.0f)
+	{
+		Float3 point = origin + ray.direction * distance;
+		position = Int3(point).max(Int3(0)).min(GridSize - Int3(1));
+
+		if (lengths_min.x() > lengths_min.y())
+		{
+			if (lengths_min.x() > lengths_min.z()) position.x() += ray.direction.x() > 0.0f ? -1 : 1;
+			else position.z() += ray.direction.z() > 0.0f ? -1 : 1;
+		}
+		else
+		{
+			if (lengths_min.y() > lengths_min.z()) position.y() += ray.direction.y() > 0.0f ? -1 : 1;
+			else position.z() += ray.direction.z() > 0.0f ? -1 : 1;
+		}
+	}
+
+	Int3 step = Int3(ray.direction.x() > 0.0f ? 1 : 0,
+	                 ray.direction.y() > 0.0f ? 1 : 0,
+	                 ray.direction.z() > 0.0f ? 1 : 0);
+
+	Float3 max_lengths = (Float3(position + step) - origin) * direction_r;
+	Float3 delta = direction_r.max(-direction_r);
+	step = step * 2 - Int3(1);
+
+	while (true)
+	{
+		normal = {};
+
+		if (max_lengths.x() < max_lengths.y())
+		{
+			if (max_lengths.x() < max_lengths.z())
+			{
+				distance = max_lengths.at<0>();
+				normal.at<0>() = -static_cast<float>(step.at<0>());
+				max_lengths.at<0>() += delta.at<0>();
+				position.at<0>() += step.at<0>();
+			}
+			else
+			{
+				distance = max_lengths.at<2>();
+				normal.at<2>() = -static_cast<float>(step.at<2>());
+				max_lengths.at<2>() += delta.at<2>();
+				position.at<2>() += step.at<2>();
+			}
+		}
+		else
+		{
+			if (max_lengths.y() < max_lengths.z())
+			{
+				distance = max_lengths.at<1>();
+				normal.at<1>() = -static_cast<float>(step.at<1>());
+				max_lengths.at<1>() += delta.at<1>();
+				position.at<1>() += step.at<1>();
+			}
+			else
+			{
+				distance = max_lengths.at<2>();
+				normal.at<2>() = -static_cast<float>(step.at<2>());
+				max_lengths.at<2>() += delta.at<2>();
+				position.at<2>() += step.at<2>();
+			}
+		}
+
+		if (!(Int3(0) <= position && position < GridSize)) return false;
+
+		uint32_t index = mangle(position.x(), 0) + mangle(position.y(), 1) + mangle(position.z(), 2);
+		bool has_voxel = (mangle(index, 3) & 3) == 0;
+
+		if (has_voxel)
+		{
+			distance *= VoxelSize;
+			material = mangle(index, 4) & 3;
+			if (material == 3 && (mangle(index, 5) & 3) != 0) material = 0;
+			return true;
+		}
+	}
+}
+
 __device__
 static bool try_intersect_scene(const Ray& ray, float& distance, uint32_t& material, Float3& normal)
 {
@@ -73,11 +193,12 @@ static bool try_intersect_scene(const Ray& ray, float& distance, uint32_t& mater
 	                                                    Float4(-1.0f, 3.0f, 1.0f, 0.5f),
 	                                                    Float4(0.0f, -100.0f, 0.0f, 100.0f) };
 
-	__constant__ static const uint32_t Materials[Count] = { 2, 1, 3, 0 };
+	__constant__ static const uint32_t Materials[Count] = { 3, 1, 3, 0 };
 
 	distance = INFINITY;
+	if (!try_intersect_voxels(ray, distance, material, normal)) distance = INFINITY;
 
-	for (size_t i = 0; i < Count; ++i)
+	for (size_t i = 0; i < 0; ++i)
 	{
 		const Float4& sphere = Spheres[i];
 		Float3 position(sphere.x(), sphere.y(), sphere.z());
@@ -182,6 +303,7 @@ static void advance(const MaterialQuery& query, const Float3& incident, const Fl
 
 	Float3 incident_world = query.transform().apply_forward(incident);
 	Ray ray(query.point + incident_world * 1E-3f, incident_world);
+	//	Ray ray(query.point + query.normal * 1E-4f, incident_world);
 	trace_queries.emplace_back(query.path_index, ray);
 }
 
@@ -220,7 +342,7 @@ void conductor(const List<uint32_t> material_indices, const List<MaterialQuery> 
 }
 
 HOST_DEVICE
-static float schlick_fresnel(float eta_outgoing, float eta_incident, float cos_outgoing, float)
+static float fresnel_schlick(float eta_outgoing, float eta_incident, float cos_outgoing, float)
 {
 	float normal_reflectance = (eta_outgoing - eta_incident) / (eta_outgoing + eta_incident);
 	normal_reflectance *= normal_reflectance;
